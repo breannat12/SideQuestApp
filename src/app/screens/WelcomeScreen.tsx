@@ -19,10 +19,10 @@ export function WelcomeScreen({ onSignUp, onLogIn }: { onSignUp: () => void; onL
           <span className="text-4xl">🤙</span>
         </div>
 
-        <h1 className="text-4xl font-extrabold mb-2" style={{ color: DARK, letterSpacing: "-0.03em" }}>Hango</h1>
-        <p className="text-base font-bold mb-2" style={{ color: MID }}>Spontaneous hangouts, made easy.</p>
+        <h1 className="text-4xl font-extrabold mb-2" style={{ color: DARK, letterSpacing: "-0.03em" }}>sidequest</h1>
+        <p className="text-base font-bold mb-2" style={{ color: MID }}>spontaneous hangouts, made easy.</p>
         <p className="text-sm leading-relaxed mb-10 max-w-xs" style={{ color: LIGHT }}>
-          See who's nearby and free — then make plans in seconds, not paragraphs.
+          see who's nearby and free — get plans out the group chat.
         </p>
 
         {/* Social proof */}

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { NotifDrawer } from "./components/sheets/NotifDrawer";
 import { PlanDetailSheet } from "./components/sheets/PlanDetailSheet";
 import { SuggestSheet } from "./components/sheets/SuggestSheet";
-import { BG, CORAL, DARK, LAVENDER, MID, MINT, SKY, WHITE } from "./constants/colors";
+import { BG, CORAL, LAVENDER, MID, SKY, WHITE } from "./constants/colors";
 import { NOTIFS } from "./data/notifs";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
 import { SignupScreen } from "./screens/SignupScreen";
@@ -41,37 +41,17 @@ export default function App() {
   };
 
   return (
-    <div className="size-full flex items-center justify-center"
+    // Fills the real viewport: `100dvh` tracks mobile browser chrome as it
+    // collapses, and `size-full` is the fallback where dvh is unsupported.
+    // Safe-area padding keeps content clear of the notch / home indicator.
+    <div className="size-full relative flex flex-col overflow-hidden"
       style={{
+        height: "100dvh",
         fontFamily: "'Nunito', sans-serif",
-        background: "radial-gradient(ellipse at 30% 20%, #D8EFFF 0%, #F0FFF8 45%, #FFE8EF 100%)",
+        background: BG,
+        paddingTop: "env(safe-area-inset-top, 0px)",
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}>
-      {/* Phone chassis */}
-      <div className="relative flex flex-col overflow-hidden"
-        style={{
-          width: 390, height: 844,
-          borderRadius: 52,
-          background: BG,
-          boxShadow: "0 50px 100px rgba(0,0,0,0.22), 0 0 0 10px #1C1C1E, 0 0 0 12px #3A3A3C, inset 0 0 0 1px rgba(255,255,255,0.1)",
-        }}>
-
-        {/* Status bar */}
-        <div className="flex items-center justify-between px-8 py-2.5 flex-shrink-0 relative">
-          <span className="text-xs font-extrabold" style={{ color: DARK, zIndex: 2 }}>9:41</span>
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-7 rounded-b-2xl" style={{ background: "#1C1C1E" }} />
-          <div className="flex items-center gap-1.5" style={{ zIndex: 2 }}>
-            <div className="flex gap-0.5 items-end h-3">
-              {[3, 4, 5, 6].map((h) => <div key={h} className="w-0.5 rounded-sm" style={{ height: h, background: DARK }} />)}
-            </div>
-            <div className="text-xs font-bold" style={{ color: DARK, fontSize: 9 }}>WiFi</div>
-            <div className="flex items-center">
-              <div className="rounded border overflow-hidden" style={{ width: 22, height: 11, borderColor: DARK, borderWidth: 1.2 }}>
-                <div className="h-full rounded-sm" style={{ width: "75%", background: MINT }} />
-              </div>
-              <div className="w-0.5 h-1.5 rounded-r flex-shrink-0" style={{ background: DARK }} />
-            </div>
-          </div>
-        </div>
 
         {/* Pre-app screens */}
         {screen === "welcome" && (
@@ -163,7 +143,6 @@ export default function App() {
             );
           })}
         </div>
-      </div>
     </div>
   );
 }
