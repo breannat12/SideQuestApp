@@ -2,8 +2,16 @@ import { Bell } from "lucide-react";
 import { CoincidenceSection } from "../../components/home/CoincidenceSection";
 import { MyPlanCard } from "../../components/plans/MyPlanCard";
 import { BG, CORAL, DARK, LAVENDER, MID, SKY, WHITE } from "../../constants/colors";
+import { useCurrentUser } from "../../data/currentUser";
 import { MY_PLANS_LATER, MY_PLANS_TODAY } from "../../data/plans";
 import type { Plan } from "../../types";
+
+const greeting = () => {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+};
 
 export function HomeTab({ onPlanTap, onSuggest, onBell, unread }: {
   onPlanTap: (p: Plan) => void;
@@ -11,18 +19,20 @@ export function HomeTab({ onPlanTap, onSuggest, onBell, unread }: {
   onBell: () => void;
   unread: number;
 }) {
+  const { firstName, initials } = useCurrentUser();
+
   return (
     <div className="flex flex-col h-full" style={{ background: BG }}>
       <div className="px-5 pt-5 pb-3 flex items-center justify-between flex-shrink-0">
         <div>
-          <p className="text-xs font-bold" style={{ color: MID }}>Good afternoon 👋</p>
-          <h1 className="text-2xl font-extrabold leading-tight" style={{ color: DARK }}>Hey, Alex!</h1>
+          <p className="text-xs font-bold" style={{ color: MID }}>{greeting()} 👋</p>
+          <h1 className="text-2xl font-extrabold leading-tight" style={{ color: DARK }}>Hey, {firstName}!</h1>
         </div>
         {/* Avatar circle with overlapping bell */}
         <button onClick={onBell} className="relative flex-shrink-0">
           <div className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-extrabold text-white select-none"
             style={{ background: `linear-gradient(135deg, ${SKY}, ${LAVENDER})` }}>
-            AX
+            {initials}
           </div>
           {/* Small bell circle overlapping top-right corner */}
           <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center border-2"

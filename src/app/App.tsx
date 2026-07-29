@@ -4,7 +4,9 @@ import { NotifDrawer } from "./components/sheets/NotifDrawer";
 import { PlanDetailSheet } from "./components/sheets/PlanDetailSheet";
 import { SuggestSheet } from "./components/sheets/SuggestSheet";
 import { BG, CORAL, LAVENDER, MID, SKY, WHITE } from "./constants/colors";
+import { CurrentUserProvider, useCurrentUser } from "./data/currentUser";
 import { NOTIFS } from "./data/notifs";
+import { CreateProfileScreen } from "./screens/CreateProfileScreen";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
 import { SignupScreen } from "./screens/SignupScreen";
 import { CreateTab } from "./screens/tabs/CreateTab";
@@ -26,12 +28,20 @@ const NAV: { id: Tab; label: string; icon: typeof Home }[] = [
 
 // ── Root ───────────────────────────────────────────────────────────────────
 export default function App() {
+  return (
+    <CurrentUserProvider>
+      <AppShell />
+    </CurrentUserProvider>
+  );
+}
+
+function AppShell() {
   const [screen, setScreen]           = useState<Screen>("welcome");
   const [tab, setTab]                 = useState<Tab>("home");
   const [notifOpen, setNotifOpen]     = useState(false);
   const [detailPlan, setDetailPlan]   = useState<Plan | null>(null);
   const [suggestPlan, setSuggestPlan] = useState<Plan | null>(null);
-  const [userName, setUserName]       = useState("");
+  const { name: userName } = useCurrentUser();
 
   const unread = NOTIFS.filter((n) => !n.read).length;
 
@@ -65,8 +75,16 @@ export default function App() {
         {screen === "signup" && (
           <div className="absolute inset-0 z-50">
             <SignupScreen
-              onNext={(name) => { setUserName(name); setScreen("onboarding"); }}
+              onNext={() => setScreen("createProfile")}
               onBack={() => setScreen("welcome")}
+            />
+          </div>
+        )}
+        {screen === "createProfile" && (
+          <div className="absolute inset-0 z-50">
+            <CreateProfileScreen
+              onNext={() => setScreen("onboarding")}
+              onBack={() => setScreen("signup")}
             />
           </div>
         )}

@@ -2,8 +2,10 @@ import { Check, Clock, EyeOff, Settings } from "lucide-react";
 import { useState } from "react";
 import { Toggle } from "../../components/common/Toggle";
 import { BG, CARD, CORAL, DARK, LAVENDER, LIGHT, MID, MINT, SKY, WHITE } from "../../constants/colors";
+import { useCurrentUser } from "../../data/currentUser";
 
 export function ProfileTab() {
+  const { name, handle, initials }  = useCurrentUser();
   const [status, setStatus]         = useState<"available" | "busy" | "dnd">("available");
   const [radius, setRadius]         = useState(1.5);
   const [notifs, setNotifs]         = useState(true);
@@ -29,15 +31,17 @@ export function ProfileTab() {
         style={{ background: `linear-gradient(135deg, ${SKY}18, ${LAVENDER}18)`, border: `1.5px solid ${SKY}20` }}>
         <div className="relative">
           <div className="w-20 h-20 rounded-[1.5rem] flex items-center justify-center text-2xl font-black text-white"
-            style={{ background: `linear-gradient(135deg, ${SKY}, ${LAVENDER})` }}>AX</div>
+            style={{ background: `linear-gradient(135deg, ${SKY}, ${LAVENDER})` }}>{initials}</div>
           <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full flex items-center justify-center border-2 border-white"
             style={{ background: statusOpts.find((s) => s.key === status)?.color ?? MINT }}>
             {status === "available" ? <Check size={13} color={WHITE} /> : status === "busy" ? <Clock size={12} color={WHITE} /> : <EyeOff size={12} color={WHITE} />}
           </div>
         </div>
         <div>
-          <h2 className="text-lg font-extrabold" style={{ color: DARK }}>Alex Chen</h2>
-          <p className="text-xs mb-2" style={{ color: MID }}>@alexc · San Francisco 📍</p>
+          <h2 className="text-lg font-extrabold" style={{ color: DARK }}>{name || "Your name"}</h2>
+          <p className="text-xs mb-2" style={{ color: MID }}>
+            {handle ? `@${handle} · ` : ""}San Francisco 📍
+          </p>
           <div className="flex gap-4">
             {[["12", "Friends"], ["28", "Plans"], ["94%", "Join Rate"]].map(([val, label]) => (
               <div key={label}>

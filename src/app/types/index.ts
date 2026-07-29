@@ -1,6 +1,6 @@
 // ── Shared types ───────────────────────────────────────────────────────────
 export type Tab    = "home" | "explore" | "create" | "friends" | "profile";
-export type Screen = "welcome" | "signup" | "onboarding" | "app";
+export type Screen = "welcome" | "signup" | "createProfile" | "onboarding" | "app";
 
 export type FriendStatus = "available" | "busy" | "dnd";
 
