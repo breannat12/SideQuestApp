@@ -1,21 +1,21 @@
-import { ArrowLeft, Check, User } from "lucide-react";
+import { ArrowLeft, Check, UserRound, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { BG, DARK, LAVENDER, LIGHT, MID, MINT, SKY, WHITE } from "../constants/colors";
 
 export function SignupScreen({ onNext, onBack }: { onNext: (name: string, handle: string) => void; onBack: () => void }) {
   const [name,   setName]   = useState("");
   const [handle, setHandle] = useState("");
+  const [password, setPassword] = useState("");
   const [nameFocused,   setNameFocused]   = useState(false);
   const [handleFocused, setHandleFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const canContinue = name.trim().length >= 2 && handle.trim().length >= 2;
 
   // Auto-derive handle from name if untouched
   const onNameChange = (v: string) => {
     setName(v);
-    if (!handleFocused && !handle) {
-      setHandle(v.toLowerCase().replace(/\s+/g, "").slice(0, 16));
-    }
   };
 
   return (
@@ -61,12 +61,12 @@ export function SignupScreen({ onNext, onBack }: { onNext: (name: string, handle
               border: `2px solid ${nameFocused ? SKY : "rgba(0,0,0,0.06)"}`,
               boxShadow: nameFocused ? `0 0 0 3px ${SKY}18` : "none",
             }}>
-            <User size={17} style={{ color: nameFocused ? SKY : LIGHT }} />
+            <UserRound size={17} style={{ color: nameFocused ? SKY : LIGHT }} />
             <input
               autoFocus
               className="flex-1 text-base font-extrabold bg-transparent outline-none"
               style={{ color: DARK }}
-              placeholder="Alex Chen"
+              placeholder="Jane Doe"
               value={name}
               onChange={(e) => onNameChange(e.target.value)}
               onFocus={() => setNameFocused(true)}
@@ -88,19 +88,52 @@ export function SignupScreen({ onNext, onBack }: { onNext: (name: string, handle
             <input
               className="flex-1 text-base font-extrabold bg-transparent outline-none"
               style={{ color: DARK }}
-              placeholder="alexchen"
+              placeholder="jane.dodo12"
               value={handle}
               onChange={(e) => setHandle(e.target.value.replace(/[^a-zA-Z0-9_.]/g, "").slice(0, 20))}
               onFocus={() => setHandleFocused(true)}
               onBlur={() => setHandleFocused(false)}
             />
             {handle.length >= 2 && (
-              <Check size={16} style={{ color: MINT }} />
+              <Check size={16} style={{ color: LAVENDER }} />
             )}
           </div>
           <p className="text-xs mt-1 px-1" style={{ color: LIGHT }}>
             Letters, numbers, underscores & dots only
           </p>
+        </div>
+
+        {/* Password */}
+        <div>
+          <label className="text-xs font-extrabold mb-1.5 block" style={{ color: MID }}>PASSWORD</label>
+          <div className="flex items-center gap-2 px-4 py-3.5 rounded-2xl transition-all"
+            style={{
+              background: WHITE,
+              border: `2px solid ${passwordFocused ? SKY : "rgba(0,0,0,0.06)"}`,
+              boxShadow: passwordFocused ? `0 0 0 3px ${SKY}18` : "none",
+            }}>
+            <input
+              type={showPassword ? "text" : "password"}
+              className="flex-1 text-base font-extrabold bg-transparent outline-none"
+              style={{ color: DARK }}
+              placeholder="•••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value.slice(0, 20))}
+              onFocus={() => setPasswordFocused(true)}
+              onBlur={() => setPasswordFocused(false)}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="flex items-center justify-center"
+            >
+              {showPassword ? (
+                <EyeOff size={18} style={{ color: passwordFocused ? SKY : LIGHT }} />
+              ) : (
+                <Eye size={18} style={{ color: passwordFocused ? SKY : LIGHT }} />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Divider hint */}
