@@ -84,6 +84,18 @@ export function OnboardingScreen({ userName, onComplete }: { userName: string; o
     return () => clearTimeout(t);
   }, [term, onFriends]);
 
+  /**
+   * Fires the real browser permission prompt. Granting it is what lets place
+   * search bias results to nearby spots later — without it, searching "blue
+   * bottle" ranks a reservoir in Wyoming over the cafe down the street.
+   * Advances either way: a declined prompt shouldn't trap anyone in onboarding.
+   */
+  const askForLocation = () => {
+    const next = () => setStep((p) => p + 1);
+    if (!navigator.geolocation) return next();
+    navigator.geolocation.getCurrentPosition(next, next, { timeout: 8000 });
+  };
+
   /** Saves the picks (if any) before handing control back to the app. */
   const finish = async () => {
     if (saving) return;
@@ -310,7 +322,7 @@ export function OnboardingScreen({ userName, onComplete }: { userName: string; o
           <p className="text-xs font-bold text-center mb-3 px-1" style={{ color: CORAL }}>{saveError}</p>
         )}
         <button disabled={saving}
-          onClick={() => last ? finish() : setStep((p) => p + 1)}
+          onClick={() => last ? finish() : s.type === "permission" ? askForLocation() : setStep((p) => p + 1)}
           className="w-full py-4 rounded-2xl text-white font-extrabold text-base transition-all"
           style={{ background: `linear-gradient(135deg, ${s.color}, ${s.color === SKY ? LAVENDER : SKY})`, boxShadow: `0 8px 20px ${s.color}35`, opacity: saving ? 0.6 : 1 }}>
           {saving

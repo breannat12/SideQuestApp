@@ -1,10 +1,12 @@
 import { Check, MapPin, Navigation, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Toggle } from "../../components/common/Toggle";
-import { BG, CARD, DARK, LAVENDER, LIGHT, MID, MINT, SKY, WHITE } from "../../constants/colors";
+import { BG, CARD, CORAL, DARK, LAVENDER, LIGHT, MID, MINT, SKY, WHITE } from "../../constants/colors";
 import { ACTIVITIES } from "../../data/activities";
-import type { Activity } from "../../types";
+import { MIN_QUERY, PLACES_ENABLED, suggestPlaces } from "../../data/places";
+import type { Activity, Place } from "../../types";
 
+/** Stand-ins used only when no Geoapify key is configured. */
 const LOCATION_PRESETS = [
   "Blue Bottle, Hayes Valley",
   "Sightglass Coffee, SoMa",
@@ -13,6 +15,12 @@ const LOCATION_PRESETS = [
   "Tony's Pizza, Union Sq",
   "Tartine Bakery, Mission",
 ];
+
+/**
+ * Long enough that a fast typist doesn't spend a credit per letter. The free
+ * plan is a daily quota, so this is cost control as much as it is polish.
+ */
+const SEARCH_DEBOUNCE_MS = 300;
 
 export function CreateTab({ onCreated }: { onCreated: () => void }) {
   const [step, setStep]         = useState(0);
@@ -24,7 +32,58 @@ export function CreateTab({ onCreated }: { onCreated: () => void }) {
   const [done, setDone]         = useState(false);
   const [locMode, setLocMode]   = useState<"current" | "custom">("current");
   const [locQuery, setLocQuery] = useState("");
-  const locationLabel = locMode === "current" ? "Current Location" : (locQuery.trim() || "Anywhere nearby");
+
+  // Place search
+  const [suggestions, setSuggestions] = useState<Place[]>([]);
+  const [place, setPlace]             = useState<Place | null>(null);
+  const [searching, setSearching]     = useState(false);
+  const [placeError, setPlaceError]   = useState("");
+
+  const locationLabel =
+    locMode === "current" ? "Current Location" : (place?.name ?? locQuery.trim()) || "Anywhere nearby";
+
+  const clearLocation = () => {
+    setLocQuery("");
+    setPlace(null);
+    setSuggestions([]);
+    setPlaceError("");
+  };
+
+  // Debounced type-ahead. The ref keeps a slow early request from landing on
+  // top of a newer one — otherwise stale results flash in as you keep typing.
+  const queryId = useRef(0);
+  useEffect(() => {
+    if (!PLACES_ENABLED || locMode !== "custom") return;
+    // A picked place already fills the field; don't re-search its own name.
+    if (place || locQuery.trim().length < MIN_QUERY) { setSuggestions([]); setSearching(false); return; }
+
+    const id = ++queryId.current;
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const found = await suggestPlaces(locQuery);
+        if (queryId.current === id) { setSuggestions(found); setPlaceError(""); }
+      } catch (err) {
+        if (queryId.current === id) {
+          setSuggestions([]);
+          setPlaceError(err instanceof Error ? err.message : "Couldn't search places.");
+        }
+      } finally {
+        if (queryId.current === id) setSearching(false);
+      }
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [locQuery, locMode, place]);
+
+  /** Results already carry coordinates, so picking one needs no round trip. */
+  const choosePlace = (p: Place) => {
+    queryId.current++;            // cancel anything still in flight
+    setSuggestions([]);
+    setSearching(false);
+    setLocQuery(p.name);
+    setPlace(p);
+    setPlaceError("");
+  };
 
   const times  = ["⚡ Now", "In 30 min", "In 1 hr", "In 2 hrs", "Tonight", "Tomorrow"];
   const groups = ["Everyone", "College", "Roommates", "Family", "Clubs"];
@@ -101,7 +160,7 @@ export function CreateTab({ onCreated }: { onCreated: () => void }) {
 
             {/* Mode toggle */}
             <div className="flex gap-2 mb-3">
-              <button onClick={() => { setLocMode("current"); setLocQuery(""); }}
+              <button onClick={() => { setLocMode("current"); clearLocation(); }}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold transition-all"
                 style={{ background: locMode === "current" ? SKY : CARD, color: locMode === "current" ? WHITE : MID }}>
                 <Navigation size={12} /> Current location
@@ -127,26 +186,68 @@ export function CreateTab({ onCreated }: { onCreated: () => void }) {
               </div>
             ) : (
               <div>
-                {/* Free-text input */}
+                {/* Search input */}
                 <div className="flex items-center gap-2 p-3.5 rounded-2xl mb-2"
                   style={{ background: CARD, border: `1.5px solid ${MINT}40` }}>
                   <MapPin size={16} style={{ color: MINT }} />
                   <input
                     autoFocus
-                    className="flex-1 text-sm font-extrabold bg-transparent outline-none"
+                    className="flex-1 text-sm font-extrabold bg-transparent outline-none min-w-0"
                     style={{ color: DARK }}
-                    placeholder="Type any address or place name…"
+                    placeholder={PLACES_ENABLED ? "Search a place or address…" : "Type any address or place name…"}
                     value={locQuery}
-                    onChange={(e) => setLocQuery(e.target.value)}
+                    onChange={(e) => { setPlace(null); setLocQuery(e.target.value); }}
                   />
                   {locQuery && (
-                    <button onClick={() => setLocQuery("")}>
+                    <button onClick={clearLocation} className="flex-shrink-0">
                       <X size={14} style={{ color: LIGHT }} />
                     </button>
                   )}
                 </div>
-                {/* Presets */}
-                {!locQuery && (
+
+                {placeError && (
+                  <p className="text-xs font-bold px-1 mb-2" style={{ color: CORAL }}>{placeError}</p>
+                )}
+
+                {/* Autocomplete results */}
+                {PLACES_ENABLED && !place && locQuery.trim().length >= MIN_QUERY && (
+                  <div>
+                    {searching && suggestions.length === 0 && (
+                      <p className="text-xs font-bold px-1 py-2" style={{ color: LIGHT }}>Searching…</p>
+                    )}
+                    {!searching && !placeError && suggestions.length === 0 && (
+                      <p className="text-xs font-bold px-1 py-2" style={{ color: LIGHT }}>
+                        Nothing found for "{locQuery.trim()}".
+                      </p>
+                    )}
+                    <div className="flex flex-col gap-1.5">
+                      {suggestions.map((s) => (
+                        <button key={s.id} onClick={() => choosePlace(s)}
+                          className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm text-left transition-all"
+                          style={{ background: WHITE, border: "1px solid rgba(0,0,0,0.06)" }}>
+                          <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                            style={{ background: MINT + "20" }}>
+                            <MapPin size={13} style={{ color: MINT }} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold truncate" style={{ color: DARK }}>{s.name}</p>
+                            {s.address && (
+                              <p className="text-xs truncate" style={{ color: MID }}>{s.address}</p>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    {suggestions.length > 0 && (
+                      <p className="text-xs px-1 pt-1.5" style={{ color: LIGHT }}>
+                        Search by Geoapify · © OpenStreetMap contributors
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Presets stand in until a Geoapify key is configured */}
+                {!PLACES_ENABLED && !locQuery && (
                   <div>
                     <p className="text-xs font-extrabold mb-1.5 px-1" style={{ color: MID }}>NEARBY SPOTS</p>
                     <div className="flex flex-col gap-1.5">
@@ -164,12 +265,20 @@ export function CreateTab({ onCreated }: { onCreated: () => void }) {
                     </div>
                   </div>
                 )}
-                {/* If user typed something, show it confirmed */}
-                {locQuery && (
+
+                {/* Confirmed pick — a real place when Mapbox resolved it, else raw text */}
+                {(place || (!PLACES_ENABLED && locQuery)) && (
                   <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
                     style={{ background: MINT + "12", border: `1.5px solid ${MINT}40` }}>
-                    <Check size={14} style={{ color: MINT }} />
-                    <span className="text-sm font-extrabold" style={{ color: DARK }}>{locQuery}</span>
+                    <Check size={14} style={{ color: MINT, flexShrink: 0 }} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-extrabold truncate" style={{ color: DARK }}>
+                        {place?.name ?? locQuery}
+                      </p>
+                      {place?.address && (
+                        <p className="text-xs truncate" style={{ color: MID }}>{place.address}</p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

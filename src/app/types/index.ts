@@ -36,6 +36,12 @@ export interface DirectoryUser {
   uid: string; username: string; name: string;
 }
 
+/** A searchable real-world place. Carries coordinates for distance math. */
+export interface Place {
+  id: string; name: string; address: string; category: string;
+  lat: number; lng: number;
+}
+
 export interface Activity {
   label: string; emoji: string; color: string;
 }
