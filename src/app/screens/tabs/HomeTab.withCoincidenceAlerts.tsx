@@ -1,4 +1,11 @@
+// WITH COINCIDENCE ALERTS
+//
+// Reference copy of the Home tab from before the coincidence alerts were
+// pulled out of v1. Nothing imports this file — it's kept so the section can
+// be dropped back in later. If HomeTab.tsx changes, this will drift.
+
 import { Bell } from "lucide-react";
+import { CoincidenceSection } from "../../components/home/CoincidenceSection";
 import { MyPlanCard } from "../../components/plans/MyPlanCard";
 import { BG, CORAL, DARK, LAVENDER, MID, SKY, WHITE } from "../../constants/colors";
 import { useCurrentUser } from "../../data/currentUser";
@@ -47,8 +54,8 @@ export function HomeTab({ onPlanTap, onSuggest, onBell, unread }: {
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-4" style={{ scrollbarWidth: "none" }}>
-        {/* Coincidence alerts are held back from v1 — see
-            HomeTab.withCoincidenceAlerts.tsx for the version that has them. */}
+        {/* Coincidence alerts */}
+        <CoincidenceSection />
 
         {/* Today's plans */}
         <div className="flex items-center justify-between mb-3">

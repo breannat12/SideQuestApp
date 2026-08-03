@@ -31,6 +31,11 @@ export interface Friend {
   activity: string; color: string; lastSeen: string; groups: string[];
 }
 
+/** A real signed-up person, as stored in the `users` collection. */
+export interface DirectoryUser {
+  uid: string; username: string; name: string;
+}
+
 export interface Activity {
   label: string; emoji: string; color: string;
 }

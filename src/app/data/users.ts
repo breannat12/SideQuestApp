@@ -6,8 +6,21 @@ import {
   updateProfile,
   type User,
 } from "firebase/auth";
-import { doc, runTransaction, serverTimestamp } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  endAt,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  runTransaction,
+  serverTimestamp,
+  startAt,
+  writeBatch,
+} from "firebase/firestore";
 import { auth, db } from "./firebase";
+import type { DirectoryUser } from "../types";
 
 /** Auth's own floor. Surfaced here so the form can check before a round trip. */
 export const MIN_PASSWORD_LENGTH = 6;
@@ -68,6 +81,76 @@ export async function saveProfile(name: string, handle: string): Promise<void> {
   });
 
   await updateProfile(user, { displayName: cleanName });
+}
+
+// ── Step 3: find people to follow ──────────────────────────────────────────
+
+/** How many directory rows a single search / suggestion pass pulls down. */
+const DIRECTORY_PAGE = 25;
+
+const toDirectoryUser = (data: Record<string, unknown>): DirectoryUser => ({
+  uid:      String(data.uid ?? ""),
+  username: String(data.username ?? ""),
+  name:     String(data.name ?? ""),
+});
+
+/**
+ * Users to show before anyone types. Ordered by handle so the list is stable
+ * between renders rather than reshuffling on every visit.
+ */
+export async function listUsers(): Promise<DirectoryUser[]> {
+  const snap = await getDocs(
+    query(collection(db, "users"), orderBy("username"), limit(DIRECTORY_PAGE)),
+  );
+  return excludeSelf(snap.docs.map((d) => toDirectoryUser(d.data())));
+}
+
+/**
+ * Prefix search over handles. Firestore has no substring index, so this is a
+ * range scan from the term to the term plus a high code point — which matches
+ * exactly the handles that *start with* what was typed.
+ */
+export async function searchUsersByUsername(term: string): Promise<DirectoryUser[]> {
+  const clean = term.trim().toLowerCase().replace(/^@/, "");
+  if (!clean) return listUsers();
+
+  const snap = await getDocs(
+    query(
+      collection(db, "users"),
+      orderBy("username"),
+      startAt(clean),
+      endAt(clean + "\uf8ff"),
+      limit(DIRECTORY_PAGE),
+    ),
+  );
+  return excludeSelf(snap.docs.map((d) => toDirectoryUser(d.data())));
+}
+
+/** You're already yourself — never offer to add yourself, or a broken row. */
+function excludeSelf(users: DirectoryUser[]): DirectoryUser[] {
+  const me = auth.currentUser?.uid;
+  return users.filter((u) => u.uid && u.username && u.uid !== me);
+}
+
+/**
+ * Writes the picked people to `users/{uid}/friends/{friendUid}`. One batch, so
+ * a half-finished onboarding doesn't leave a partial friend list behind.
+ */
+export async function addFriends(friends: DirectoryUser[]): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) throw new Error("not-signed-in");
+  if (!friends.length) return;
+
+  const batch = writeBatch(db);
+  for (const friend of friends) {
+    batch.set(doc(db, "users", user.uid, "friends", friend.uid), {
+      uid:       friend.uid,
+      username:  friend.username,
+      name:      friend.name,
+      addedAt:   serverTimestamp(),
+    });
+  }
+  await batch.commit();
 }
 
 // ── Errors ─────────────────────────────────────────────────────────────────
