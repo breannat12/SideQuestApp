@@ -2,7 +2,9 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   OAuthProvider,
+  signInWithEmailAndPassword,
   signInWithPopup,
+  signOut,
   updateProfile,
   type User,
 } from "firebase/auth";
@@ -10,20 +12,48 @@ import {
   collection,
   doc,
   endAt,
+  getDoc,
   getDocs,
   limit,
   orderBy,
   query,
   runTransaction,
   serverTimestamp,
+  setDoc,
   startAt,
   writeBatch,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
-import type { DirectoryUser } from "../types";
+import type { DirectoryUser, StoredProfile } from "../types";
 
 /** Auth's own floor. Surfaced here so the form can check before a round trip. */
 export const MIN_PASSWORD_LENGTH = 6;
+
+// ── Alert radius ───────────────────────────────────────────────────────────
+// Shared by the slider and by the clamp on whatever comes back from Firestore,
+// so a hand-edited document can't render a thumb off the end of the track.
+
+export const RADIUS_MIN     = 0.5;
+export const RADIUS_MAX     = 5;
+export const RADIUS_STEP    = 0.5;
+export const RADIUS_DEFAULT = 1.5;
+
+const readRadius = (value: unknown): number => {
+  const miles = typeof value === "number" ? value : NaN;
+  if (!Number.isFinite(miles)) return RADIUS_DEFAULT;
+  return Math.min(RADIUS_MAX, Math.max(RADIUS_MIN, miles));
+};
+
+/**
+ * Merges the radius onto the profile row, leaving name and handle alone.
+ * A signed-out caller is a no-op rather than an error: onboarding can reach
+ * this step, and losing a slider position is not worth interrupting anyone for.
+ */
+export async function saveRadius(miles: number): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) return;
+  await setDoc(doc(db, "users", user.uid), { radiusMiles: miles }, { merge: true });
+}
 
 // ── Step 1: create the account ─────────────────────────────────────────────
 
@@ -33,6 +63,11 @@ export async function signUpWithEmail(email: string, password: string): Promise<
   return cred.user;
 }
 
+/**
+ * Google and Apple don't distinguish signing up from signing back in — the
+ * popup returns an existing account if there is one — so both entry points
+ * share these two.
+ */
 export async function signInWithGoogle(): Promise<User> {
   const provider = new GoogleAuthProvider();
   const cred = await signInWithPopup(auth, provider);
@@ -45,6 +80,35 @@ export async function signInWithApple(): Promise<User> {
   provider.addScope("name");
   const cred = await signInWithPopup(auth, provider);
   return cred.user;
+}
+
+// ── Coming back ────────────────────────────────────────────────────────────
+
+/** Email + password sign-in for an account that already exists. */
+export async function signInWithEmail(email: string, password: string): Promise<User> {
+  const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+  return cred.user;
+}
+
+export async function signOutUser(): Promise<void> {
+  await signOut(auth);
+}
+
+/**
+ * The saved profile for a uid, or null if signup never got past the account.
+ * Both the boot-time session restore and a fresh log-in ask this to decide
+ * whether the person lands in the app or back on profile setup.
+ */
+export async function fetchProfile(uid: string): Promise<StoredProfile | null> {
+  const snap = await getDoc(doc(db, "users", uid));
+  if (!snap.exists()) return null;
+
+  const data   = snap.data();
+  const name   = String(data.name ?? "");
+  const handle = String(data.username ?? "");
+  if (!name && !handle) return null;
+
+  return { name, handle, radius: readRadius(data.radiusMiles) };
 }
 
 // ── Step 2: claim a name and handle ────────────────────────────────────────
@@ -171,6 +235,17 @@ export function authErrorMessage(err: unknown): string {
       return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
     case "auth/invalid-email":
       return "Invalid email.";
+    // With email-enumeration protection on, Auth collapses "no such user" and
+    // "wrong password" into one code on purpose. Don't narrow it in the copy.
+    case "auth/invalid-credential":
+    case "auth/invalid-login-credentials":
+    case "auth/wrong-password":
+    case "auth/user-not-found":
+      return "Email or password is incorrect.";
+    case "auth/too-many-requests":
+      return "Too many attempts. Wait a minute and try again.";
+    case "auth/user-disabled":
+      return "That account has been disabled.";
     case "auth/network-request-failed":
       return "Network error. Check your connection and try again.";
     case "auth/popup-closed-by-user":

@@ -24,7 +24,9 @@ export function PlanDetailSheet({ plan, onClose, onSuggest }: { plan: Plan; onCl
             <div className="grid grid-cols-3 gap-2 mb-5">
               {[
                 { icon: Clock, label: "Time", value: plan.time },
-                { icon: MapPin, label: "Distance", value: plan.distance },
+                // Saved plans have no distance behind them yet — show a dash
+                // rather than an empty tile in the middle of the row.
+                { icon: MapPin, label: "Distance", value: plan.distance ?? "—" },
                 { icon: Users, label: "Going", value: `${plan.attendees} people` },
               ].map(({ icon: Icon, label, value }) => (
                 <div key={label} className="rounded-2xl p-3 text-center" style={{ background: CARD }}>
@@ -44,7 +46,9 @@ export function PlanDetailSheet({ plan, onClose, onSuggest }: { plan: Plan; onCl
                 <MessageCircle size={15} style={{ color: SKY }} />
               </button>
             </div>
-            <p className="text-sm mb-4 leading-relaxed" style={{ color: MID }}>"{plan.description}"</p>
+            {plan.description && (
+              <p className="text-sm mb-4 leading-relaxed" style={{ color: MID }}>"{plan.description}"</p>
+            )}
             <div className="mb-5">
               <p className="text-sm font-extrabold mb-3" style={{ color: DARK }}>Who's going</p>
               <div className="flex flex-wrap gap-2">

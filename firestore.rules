@@ -1,0 +1,50 @@
+rules_version = '2';
+
+// Security rules for the sidequest Firestore database.
+//
+// Deploy with:  firebase deploy --only firestore:rules
+// Or paste into: Firebase console -> Firestore Database -> Rules -> Publish
+//
+// These replace the default test-mode rules, which expire ~30 days after the
+// project is created and then deny everything.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Profiles. Anyone signed in can read them — that's what powers the
+    // username search on onboarding — but only you can write your own.
+    match /users/{uid} {
+      allow read:  if signedIn();
+      allow write: if isOwner(uid);
+
+      // Your friend list, private to you.
+      match /friends/{friendUid} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
+    // Handle reservations. Readable so a taken handle can be detected, and
+    // claimable only by the person the document points at. Deliberately no
+    // update or delete: a handle, once claimed, isn't transferable yet.
+    match /usernames/{handle} {
+      allow read:   if signedIn();
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+    }
+
+    // Plans. Readable by any signed-in user so a friends' feed can be built on
+    // top later; writable only by whoever hosts them.
+    match /plans/{planId} {
+      allow read:   if signedIn();
+      allow create: if signedIn() && request.resource.data.hostUid == request.auth.uid;
+      allow update, delete: if signedIn() && resource.data.hostUid == request.auth.uid;
+    }
+  }
+}

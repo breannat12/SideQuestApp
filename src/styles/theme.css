@@ -179,3 +179,31 @@
     line-height: 1.5;
   }
 }
+
+/*
+ * The alert-radius slider paints its own track and thumb; the native input
+ * lies on top, invisible, purely to catch drags and arrow keys. Its thumb has
+ * to be the same width as the drawn one — the browser insets the value by half
+ * a thumb at each end, so a mismatch makes clicks near the ends land on the
+ * wrong step.
+ */
+.radius-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+.radius-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+}
+
+.radius-slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 9999px;
+}

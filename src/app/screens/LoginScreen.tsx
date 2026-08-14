@@ -1,16 +1,30 @@
 import { ArrowLeft, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { useState } from "react";
 import { AppleMark, GoogleMark } from "../components/common/BrandMarks";
-import { BG, CORAL, DARK, LAVENDER, LIGHT, MID, MINT, SKY, WHITE } from "../constants/colors";
+import { BG, CORAL, DARK, LAVENDER, LIGHT, MID, SKY, WHITE } from "../constants/colors";
+import { useCurrentUser } from "../data/currentUser";
 import {
-  MIN_PASSWORD_LENGTH,
   authErrorMessage,
+  fetchProfile,
   signInWithApple,
+  signInWithEmail,
   signInWithGoogle,
-  signUpWithEmail,
 } from "../data/users";
+import type { User } from "firebase/auth";
 
-export function SignupScreen({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
+export function LoginScreen({
+  onLoggedIn,
+  onNeedsProfile,
+  onSignUp,
+  onBack,
+}: {
+  onLoggedIn: () => void;
+  /** Signed in, but signup never got as far as claiming a name and handle. */
+  onNeedsProfile: () => void;
+  onSignUp: () => void;
+  onBack: () => void;
+}) {
+  const { setProfile } = useCurrentUser();
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
   const [emailFocused,    setEmailFocused]    = useState(false);
@@ -20,16 +34,29 @@ export function SignupScreen({ onNext, onBack }: { onNext: () => void; onBack: (
   const [error, setError] = useState("");
 
   const busy = pending !== "";
-  const canContinue = /^\S+@\S+\.\S+$/.test(email.trim()) && password.length >= MIN_PASSWORD_LENGTH;
+  // No length floor here: a too-short password is a wrong password, and Auth's
+  // own message for that is more useful than greying the button out.
+  const canContinue = /^\S+@\S+\.\S+$/.test(email.trim()) && password.length > 0;
 
-  // Every path lands on the same place: signed in, profile still empty.
-  const run = async (kind: "email" | "google" | "apple", signIn: () => Promise<unknown>) => {
+  /**
+   * Where you land depends on whether setup ever finished — a Google account
+   * that bailed before Create Profile can arrive here just as easily as it can
+   * arrive at signup.
+   */
+  const run = async (kind: "email" | "google" | "apple", signIn: () => Promise<User>) => {
     if (busy) return;
     setPending(kind);
     setError("");
     try {
-      await signIn();
-      onNext();
+      const user = await signIn();
+      // A failed lookup shouldn't strand a valid session on this screen; the
+      // display name is enough to get someone in, and profile setup can retry.
+      const profile = await fetchProfile(user.uid).catch(() => null);
+      const name    = profile?.name || user.displayName || "";
+
+      if (!name) return onNeedsProfile();
+      setProfile(name, profile?.handle ?? "");
+      onLoggedIn();
     } catch (err) {
       setError(authErrorMessage(err));
     } finally {
@@ -40,7 +67,7 @@ export function SignupScreen({ onNext, onBack }: { onNext: () => void; onBack: (
   return (
     <div className="absolute inset-0 flex flex-col" style={{ background: BG }}>
       <div className="absolute top-0 right-0 w-48 h-48 rounded-full opacity-30 pointer-events-none"
-        style={{ background: `radial-gradient(circle, ${MINT}60 0%, transparent 70%)`, transform: "translate(30%, -30%)" }} />
+        style={{ background: `radial-gradient(circle, ${SKY}60 0%, transparent 70%)`, transform: "translate(30%, -30%)" }} />
 
       {/* Header */}
       <div className="px-6 pt-14 pb-8 flex items-center gap-3 flex-shrink-0">
@@ -49,8 +76,8 @@ export function SignupScreen({ onNext, onBack }: { onNext: () => void; onBack: (
           <ArrowLeft size={17} style={{ color: DARK }} />
         </button>
         <div>
-          <h1 className="text-2xl font-extrabold" style={{ color: DARK }}>Sign up</h1>
-          <p className="text-xs font-bold" style={{ color: MID }}>Create your sidequest login</p>
+          <h1 className="text-2xl font-extrabold" style={{ color: DARK }}>Welcome back</h1>
+          <p className="text-xs font-bold" style={{ color: MID }}>Log in to your sidequest</p>
         </div>
       </div>
 
@@ -93,7 +120,7 @@ export function SignupScreen({ onNext, onBack }: { onNext: () => void; onBack: (
             <Lock size={17} style={{ color: passwordFocused ? LAVENDER : LIGHT }} />
             <input
               type={showPassword ? "text" : "password"}
-              autoComplete="new-password"
+              autoComplete="current-password"
               className="flex-1 text-base font-extrabold bg-transparent outline-none"
               style={{ color: DARK }}
               placeholder="••••••"
@@ -102,7 +129,7 @@ export function SignupScreen({ onNext, onBack }: { onNext: () => void; onBack: (
               onFocus={() => setPasswordFocused(true)}
               onBlur={() => setPasswordFocused(false)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && canContinue) run("email", () => signUpWithEmail(email, password));
+                if (e.key === "Enter" && canContinue) run("email", () => signInWithEmail(email, password));
               }}
             />
             <button type="button" onClick={() => setShowPassword(!showPassword)}
@@ -112,15 +139,12 @@ export function SignupScreen({ onNext, onBack }: { onNext: () => void; onBack: (
                 : <Eye    size={18} style={{ color: passwordFocused ? LAVENDER : LIGHT }} />}
             </button>
           </div>
-          <p className="text-xs mt-1 px-1" style={{ color: LIGHT }}>
-            At least {MIN_PASSWORD_LENGTH} characters
-          </p>
         </div>
 
         {/* Divider */}
         <div className="flex items-center gap-3 mt-1">
           <div className="flex-1 h-px" style={{ background: "rgba(0,0,0,0.07)" }} />
-          <span className="text-xs font-bold" style={{ color: LIGHT }}>or sign up with</span>
+          <span className="text-xs font-bold" style={{ color: LIGHT }}>or log in with</span>
           <div className="flex-1 h-px" style={{ background: "rgba(0,0,0,0.07)" }} />
         </div>
 
@@ -151,14 +175,21 @@ export function SignupScreen({ onNext, onBack }: { onNext: () => void; onBack: (
         )}
         <button
           disabled={!canContinue || busy}
-          onClick={() => run("email", () => signUpWithEmail(email, password))}
+          onClick={() => run("email", () => signInWithEmail(email, password))}
           className="w-full py-4 rounded-2xl font-extrabold text-white text-base transition-all"
           style={{
             background: canContinue && !busy ? `linear-gradient(135deg, ${SKY}, ${LAVENDER})` : LIGHT,
             boxShadow: canContinue && !busy ? `0 8px 20px ${SKY}35` : "none",
           }}>
-          {pending === "email" ? "Creating account…" : "Continue →"}
+          {pending === "email" ? "Logging in…" : "Log in →"}
         </button>
+
+        <p className="text-center text-xs font-bold mt-4" style={{ color: MID }}>
+          New here?{" "}
+          <button onClick={onSignUp} className="font-extrabold" style={{ color: SKY }}>
+            Create an account
+          </button>
+        </p>
       </div>
     </div>
   );

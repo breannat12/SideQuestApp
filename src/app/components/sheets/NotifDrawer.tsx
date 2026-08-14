@@ -5,7 +5,8 @@ import type { Notif } from "../../types";
 
 export function NotifDrawer({ onClose }: { onClose: () => void }) {
   const icon = (type: Notif["type"]) => {
-    if (type === "coincidence") return { bg: SKY + "20", emoji: "⚡" };
+    // COINCIDENCE FEATURE -- icon for the nearby-friend notification kind.
+    // if (type === "coincidence") return { bg: SKY + "20", emoji: "⚡" };
     if (type === "join")        return { bg: MINT + "20", emoji: "✓"  };
     if (type === "ping")        return { bg: CORAL + "20", emoji: "👋" };
     return { bg: LAVENDER + "20", emoji: "📅" };

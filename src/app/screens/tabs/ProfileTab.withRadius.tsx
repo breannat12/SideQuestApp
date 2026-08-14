@@ -1,12 +1,20 @@
+// COINCIDENCE FEATURE -- Reference copy of the Profile tab from when it carried
+// the Notification Radius control. The radius only exists to decide how close a
+// friend has to be before a coincidence alert fires, so it goes back in when
+// that feature does. Swap App.tsx's import to this file to restore it.
+//
+// Kept in sync by hand: any change to ProfileTab.tsx belongs here too.
+
 import { Check, Clock, EyeOff, Settings } from "lucide-react";
 import { useState } from "react";
+import { RadiusSlider } from "../../components/common/RadiusSlider";
 import { Toggle } from "../../components/common/Toggle";
 import { BG, CARD, CORAL, DARK, LAVENDER, MID, MINT, SKY, WHITE } from "../../constants/colors";
 import { useCurrentUser } from "../../data/currentUser";
 import { signOutUser } from "../../data/users";
 
 export function ProfileTab({ onSignedOut }: { onSignedOut: () => void }) {
-  const { name, handle, initials } = useCurrentUser();
+  const { name, handle, initials, radius, setRadius } = useCurrentUser();
   const [status, setStatus]         = useState<"available" | "busy" | "dnd">("available");
   const [notifs, setNotifs]         = useState(true);
   const [ghost, setGhost]           = useState(false);
@@ -84,17 +92,26 @@ export function ProfileTab({ onSignedOut }: { onSignedOut: () => void }) {
           </div>
         </div>
 
-        {/* COINCIDENCE FEATURE -- the Notification Radius card lived here. It
-            sets how close a friend has to be before a coincidence alert fires,
-            so it is held back with that feature. The full version of this
-            screen is kept at ProfileTab.withRadius.tsx. */}
+        {/* Radius */}
+        <div className="p-4 rounded-2xl" style={{ background: WHITE, border: "1px solid rgba(0,0,0,0.06)" }}>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-sm font-extrabold" style={{ color: DARK }}>Notification Radius</p>
+              <p className="text-xs mt-0.5" style={{ color: MID }}>Alert me when friends are within…</p>
+            </div>
+            <div className="px-3 py-1.5 rounded-xl" style={{ background: SKY + "18" }}>
+              <span className="text-base font-extrabold" style={{ color: SKY }}>{radius} mi</span>
+            </div>
+          </div>
+
+          <RadiusSlider value={radius} onChange={setRadius} />
+        </div>
 
         {/* Privacy */}
         <div className="p-4 rounded-2xl flex flex-col gap-4" style={{ background: WHITE, border: "1px solid rgba(0,0,0,0.06)" }}>
           <p className="text-sm font-extrabold" style={{ color: DARK }}>Privacy & Notifications</p>
           {[
-            // COINCIDENCE FEATURE -- sub was "Coincidences & friend activity".
-            { label: "Push Notifications", sub: "Friend activity & pings",        val: notifs, set: setNotifs, color: CORAL },
+            { label: "Push Notifications", sub: "Coincidences & friend activity", val: notifs, set: setNotifs, color: CORAL },
             { label: "Plan Alerts",         sub: "When friends create nearby plans",val: planNotifs, set: setPlanNotifs, color: SKY },
             { label: "Ghost Mode",          sub: "Hide your location from friends", val: ghost, set: setGhost, color: MID },
           ].map(({ label, sub, val, set, color }) => (

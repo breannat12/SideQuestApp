@@ -1,8 +1,9 @@
 import { Bell } from "lucide-react";
+import { useEffect, useState } from "react";
 import { MyPlanCard } from "../../components/plans/MyPlanCard";
-import { BG, CORAL, DARK, LAVENDER, MID, SKY, WHITE } from "../../constants/colors";
+import { BG, CORAL, DARK, LAVENDER, LIGHT, MID, SKY, WHITE } from "../../constants/colors";
 import { useCurrentUser } from "../../data/currentUser";
-import { MY_PLANS_LATER, MY_PLANS_TODAY } from "../../data/plans";
+import { isToday, watchMyPlans } from "../../data/plans";
 import type { Plan } from "../../types";
 
 const greeting = () => {
@@ -18,7 +19,28 @@ export function HomeTab({ onPlanTap, onSuggest, onBell, unread }: {
   onBell: () => void;
   unread: number;
 }) {
-  const { firstName, initials } = useCurrentUser();
+  const { firstName, initials, status } = useCurrentUser();
+  const [plans, setPlans]     = useState<Plan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState("");
+
+  // Re-subscribes when the session changes, so signing in as someone else
+  // swaps the list rather than leaving the last person's plans on screen.
+  useEffect(() => {
+    if (status !== "signedIn") {
+      setPlans([]);
+      setLoading(status === "loading");
+      return;
+    }
+    setLoading(true);
+    return watchMyPlans(
+      (found) => { setPlans(found); setError(""); setLoading(false); },
+      ()      => { setError("Couldn't load your plans."); setLoading(false); },
+    );
+  }, [status]);
+
+  const todayPlans = plans.filter((p) => isToday(p.startsAt));
+  const laterPlans = plans.filter((p) => !isToday(p.startsAt));
 
   return (
     <div className="flex flex-col h-full" style={{ background: BG }}>
@@ -50,35 +72,57 @@ export function HomeTab({ onPlanTap, onSuggest, onBell, unread }: {
         {/* Coincidence alerts are held back from v1 — see
             HomeTab.withCoincidenceAlerts.tsx for the version that has them. */}
 
-        {/* Today's plans */}
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-extrabold" style={{ color: DARK }}>Today's Sidequests</h2>
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full"
-            style={{ background: SKY + "20", color: SKY }}>{MY_PLANS_TODAY.length} plans</span>
-        </div>
-        {MY_PLANS_TODAY.map((p) => (
-          <MyPlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onSuggest={() => onSuggest(p)} />
-        ))}
+        {error && (
+          <p className="text-sm font-bold text-center py-8" style={{ color: CORAL }}>{error}</p>
+        )}
 
-        <div className="h-px my-4" style={{ background: "rgba(0,0,0,0.07)" }} />
+        {!error && loading && (
+          <p className="text-sm font-bold text-center py-12" style={{ color: LIGHT }}>Loading your plans…</p>
+        )}
 
-        {/* Later plans */}
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-extrabold" style={{ color: DARK }}>Later</h2>
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full"
-            style={{ background: LAVENDER + "20", color: LAVENDER }}>{MY_PLANS_LATER.length} plans</span>
-        </div>
-        {MY_PLANS_LATER.map((p) => (
-          <MyPlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onSuggest={() => onSuggest(p)} />
-        ))}
+        {!error && !loading && (
+          <>
+            {/* Today's plans */}
+            {todayPlans.length > 0 && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-base font-extrabold" style={{ color: DARK }}>Today's Sidequests</h2>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+                    style={{ background: SKY + "20", color: SKY }}>{todayPlans.length} plans</span>
+                </div>
+                {todayPlans.map((p) => (
+                  <MyPlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onSuggest={() => onSuggest(p)} />
+                ))}
+              </>
+            )}
 
-        {/* Empty nudge */}
-        {MY_PLANS_TODAY.length === 0 && MY_PLANS_LATER.length === 0 && (
-          <div className="flex flex-col items-center py-12 gap-3 text-center">
-            <span className="text-5xl">📅</span>
-            <p className="text-base font-extrabold" style={{ color: DARK }}>No plans yet</p>
-            <p className="text-sm" style={{ color: MID }}>Tap + to create one, or explore what's nearby.</p>
-          </div>
+            {todayPlans.length > 0 && laterPlans.length > 0 && (
+              <div className="h-px my-4" style={{ background: "rgba(0,0,0,0.07)" }} />
+            )}
+
+            {/* Later plans */}
+            {laterPlans.length > 0 && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-base font-extrabold" style={{ color: DARK }}>Later</h2>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+                    style={{ background: LAVENDER + "20", color: LAVENDER }}>{laterPlans.length} plans</span>
+                </div>
+                {laterPlans.map((p) => (
+                  <MyPlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onSuggest={() => onSuggest(p)} />
+                ))}
+              </>
+            )}
+
+            {/* Empty nudge */}
+            {plans.length === 0 && (
+              <div className="flex flex-col items-center py-12 gap-3 text-center">
+                <span className="text-5xl">📅</span>
+                <p className="text-base font-extrabold" style={{ color: DARK }}>No plans yet</p>
+                <p className="text-sm" style={{ color: MID }}>Tap + to create one, or explore what's nearby.</p>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

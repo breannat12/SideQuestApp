@@ -1,11 +1,13 @@
 import { CORAL, LAVENDER, MINT, PEACH, SKY } from "../constants/colors";
-import type { CoincidenceAlert, Friend } from "../types";
+import type { Friend } from "../types";
 
-export const COINCIDENCE_ALERTS: CoincidenceAlert[] = [
-  { id: 1, name: "Mia K.",  avatar: "MK", avatarColor: PEACH,    distance: "0.2 mi", status: "Free now",          location: "Blue Bottle nearby",      time: "Just now" },
-  { id: 2, name: "Cole M.", avatar: "CM", avatarColor: MINT,     distance: "0.5 mi", status: "Up for anything",   location: "Near Whole Foods",        time: "3m ago"   },
-  { id: 3, name: "Lily T.", avatar: "LT", avatarColor: SKY,      distance: "0.8 mi", status: "Free all afternoon",location: "Main Library area",        time: "8m ago"   },
-];
+// COINCIDENCE FEATURE -- seed data for the nearby-and-free alerts on Home.
+// Restore alongside the CoincidenceAlert type and CoincidenceSection.
+// export const COINCIDENCE_ALERTS: CoincidenceAlert[] = [
+//   { id: 1, name: "Mia K.",  avatar: "MK", avatarColor: PEACH,    distance: "0.2 mi", status: "Free now",          location: "Blue Bottle nearby",      time: "Just now" },
+//   { id: 2, name: "Cole M.", avatar: "CM", avatarColor: MINT,     distance: "0.5 mi", status: "Up for anything",   location: "Near Whole Foods",        time: "3m ago"   },
+//   { id: 3, name: "Lily T.", avatar: "LT", avatarColor: SKY,      distance: "0.8 mi", status: "Free all afternoon",location: "Main Library area",        time: "8m ago"   },
+// ];
 
 export const FRIENDS_DATA: Friend[] = [
   { name: "Mia K.",  avatar: "MK", status: "available", activity: "Open for coffee ☕",         color: PEACH,     lastSeen: "Now",     groups: ["College"]              },

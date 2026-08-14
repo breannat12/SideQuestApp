@@ -11,6 +11,47 @@ export const ACTIVITIES: Activity[] = [
   { label: "Music",  emoji: "🎵", color: "#FFC9DE" },
 ];
 
+/**
+ * Emoji a plan can be badged with, each paired with the accent colour its card
+ * picks up. The first entry is the default: deliberately generic, so a plan
+ * that doesn't fit any category still looks deliberate rather than unfinished.
+ */
+export const PLAN_EMOJIS: { emoji: string; color: string }[] = [
+  { emoji: "👥", color: SKY       },
+  { emoji: "☕", color: PEACH     },
+  { emoji: "🍕", color: CORAL     },
+  { emoji: "🍔", color: CORAL     },
+  { emoji: "🌮", color: PEACH     },
+  { emoji: "🍣", color: CORAL     },
+  { emoji: "🍺", color: PEACH     },
+  { emoji: "🍦", color: "#FFC9DE" },
+  { emoji: "🎂", color: "#FFC9DE" },
+  { emoji: "📚", color: SKY       },
+  { emoji: "💻", color: SKY       },
+  { emoji: "🎮", color: LAVENDER  },
+  { emoji: "🎬", color: "#A5D8FF" },
+  { emoji: "🎵", color: "#FFC9DE" },
+  { emoji: "🎤", color: LAVENDER  },
+  { emoji: "🎨", color: LAVENDER  },
+  { emoji: "🏋️", color: MINT      },
+  { emoji: "🏃", color: MINT      },
+  { emoji: "⚽", color: MINT      },
+  { emoji: "🏀", color: CORAL     },
+  { emoji: "🧘", color: MINT      },
+  { emoji: "🚴", color: MINT      },
+  { emoji: "🥾", color: MINT      },
+  { emoji: "🌳", color: MINT      },
+  { emoji: "🏖️", color: "#A5D8FF" },
+  { emoji: "🎉", color: CORAL     },
+  { emoji: "🛍️", color: LAVENDER  },
+  { emoji: "✈️", color: SKY       },
+  { emoji: "🚗", color: SKY       },
+  { emoji: "🐶", color: PEACH     },
+];
+
+/** The badge a plan gets when nothing else is chosen. */
+export const DEFAULT_PLAN_EMOJI = PLAN_EMOJIS[0];
+
 export const TIME_SUGGESTIONS = ["Now", "In 30 min", "In 1 hr", "In 2 hrs", "Tonight", "Tomorrow morning"];
 
 export const LOCATION_SUGGESTIONS = [

@@ -1,7 +1,16 @@
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { auth, db } from "./firebase";
+import {
+  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
+  type ReactNode,
+} from "react";
+import { auth } from "./firebase";
+import { RADIUS_DEFAULT, fetchProfile, saveRadius } from "./users";
+
+/**
+ * Dragging the radius slider fires a change per half-mile step; only the value
+ * someone settles on is worth a write, so the save waits for them to stop.
+ */
+const RADIUS_SAVE_DELAY_MS = 600;
 
 /**
  * Sentinel used in mock data wherever an avatar is meant to be *you*.
@@ -10,7 +19,17 @@ import { auth, db } from "./firebase";
  */
 export const ME = "@me";
 
+/**
+ * How far Firebase has got in restoring a session. `loading` lasts only until
+ * the first `onAuthStateChanged`, and the app holds a splash for it — without
+ * that, someone already signed in watches the welcome screen flash past.
+ */
+export type AuthStatus = "loading" | "signedOut" | "signedIn";
+
 interface CurrentUserValue {
+  status: AuthStatus;
+  /** A saved name is the test for "finished signing up", not just "signed in". */
+  hasProfile: boolean;
   /** Full name as typed on Create Profile. Empty until the profile is saved. */
   name: string;
   /** Handle without the leading `@`, lowercase. */
@@ -19,7 +38,11 @@ interface CurrentUserValue {
   firstName: string;
   /** Up to two letters for avatars, or "?" before a name exists. */
   initials: string;
+  /** Alert radius in miles, as picked during onboarding or on Profile. */
+  radius: number;
   setProfile: (name: string, handle: string) => void;
+  /** Applies immediately; the write to Firestore is debounced. */
+  setRadius: (miles: number) => void;
 }
 
 const deriveInitials = (name: string) => {
@@ -35,45 +58,85 @@ const deriveInitials = (name: string) => {
 };
 
 const CurrentUserContext = createContext<CurrentUserValue>({
+  status: "loading",
+  hasProfile: false,
   name: "",
   handle: "",
   firstName: "there",
   initials: "?",
+  radius: RADIUS_DEFAULT,
   setProfile: () => {},
+  setRadius: () => {},
 });
 
 export function CurrentUserProvider({ children }: { children: ReactNode }) {
+  const [status, setStatus]        = useState<AuthStatus>("loading");
   const [profile, setProfileState] = useState({ name: "", handle: "" });
+  const [radius, setRadiusState]   = useState(RADIUS_DEFAULT);
+
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelPendingSave = () => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = null;
+  };
+
+  const setRadius = useCallback((miles: number) => {
+    setRadiusState(miles);
+    cancelPendingSave();
+    saveTimer.current = setTimeout(() => {
+      // Nothing to tell the user here — the slider already moved, and a failed
+      // write just means the old value is still what loads next time.
+      void saveRadius(miles).catch(() => {});
+    }, RADIUS_SAVE_DELAY_MS);
+  }, []);
+
+  useEffect(() => cancelPendingSave, []);
 
   // Covers the log-in path (and a page refresh mid-session), where nothing in
   // this session went through Create Profile. A profile already set locally
   // always wins — it's the newer of the two.
   useEffect(() => {
     return onAuthStateChanged(auth, async (user) => {
-      if (!user) return;
+      if (!user) {
+        // Drop any queued write too, so a radius set moments before signing out
+        // can't land on the next account to sign in.
+        cancelPendingSave();
+        setProfileState({ name: "", handle: "" });
+        setRadiusState(RADIUS_DEFAULT);
+        setStatus("signedOut");
+        return;
+      }
+
       let stored = { name: user.displayName ?? "", handle: "" };
       try {
-        const snap = await getDoc(doc(db, "users", user.uid));
-        if (snap.exists()) {
-          const data = snap.data();
-          stored = { name: data.name ?? stored.name, handle: data.username ?? "" };
+        const saved = await fetchProfile(user.uid);
+        if (saved) {
+          stored = { name: saved.name || stored.name, handle: saved.handle };
+          setRadiusState(saved.radius);
         }
       } catch {
         // Offline or rules-blocked: displayName alone is still better than nothing.
       }
-      if (!stored.name && !stored.handle) return;
+
       setProfileState((prev) => (prev.name || prev.handle ? prev : stored));
+      // Set last, and only once the lookup has had its say: boot routing keys
+      // off `status`, and reading it early would send a returning user to setup.
+      setStatus("signedIn");
     });
   }, []);
 
   const value = useMemo<CurrentUserValue>(() => ({
+    status,
+    hasProfile: Boolean(profile.name),
     name:      profile.name,
     handle:    profile.handle,
     firstName: profile.name.trim().split(/\s+/)[0] || "there",
     initials:  deriveInitials(profile.name),
+    radius,
     setProfile: (name, handle) =>
       setProfileState({ name: name.trim(), handle: handle.trim().toLowerCase() }),
-  }), [profile]);
+    setRadius,
+  }), [status, profile, radius, setRadius]);
 
   return <CurrentUserContext.Provider value={value}>{children}</CurrentUserContext.Provider>;
 }

@@ -1,6 +1,8 @@
 import { Check, MapPin, Plus, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { RadiusSlider } from "../components/common/RadiusSlider";
 import { BG, CARD, CORAL, DARK, LAVENDER, LIGHT, MID, MINT, PEACH, SKY, WHITE } from "../constants/colors";
+import { useCurrentUser } from "../data/currentUser";
 import { addFriends, searchUsersByUsername } from "../data/users";
 import type { DirectoryUser } from "../types";
 
@@ -18,33 +20,48 @@ const initialsFor = (u: DirectoryUser) =>
 /** Long enough that typing a handle doesn't fire a read per keystroke. */
 const SEARCH_DEBOUNCE_MS = 300;
 
-const ONBOARDING_STEPS_NEW = [
+/**
+ * Typed explicitly rather than inferred, so "radius" stays a legal step kind
+ * while its entry is commented out below — that keeps the step's markup
+ * compiling instead of going stale as unreachable code.
+ */
+interface OnboardingStep {
+  emoji: string; title: string; color: string;
+  subtitle: string; description: string; cta: string;
+  type: "permission" | "radius" | "friends";
+}
+
+const ONBOARDING_STEPS_NEW: OnboardingStep[] = [
   {
     emoji: "📍", title: "Share your location", color: MINT,
     subtitle: "Only shared with friends you choose.",
     description: "Hango uses your location to find nearby friends and plans. We never store or sell your location data.",
     cta: "Allow Location",
-    type: "permission" as const,
+    type: "permission",
   },
-  {
-    emoji: "🔔", title: "Notification radius", color: SKY,
-    subtitle: "How close should a friend be before we ping you?",
-    description: "We'll send a nudge when a free friend enters your radius — no spam, just good timing.",
-    cta: "Set Radius",
-    type: "radius" as const,
-  },
+  // COINCIDENCE FEATURE -- the radius step. It only asks how close a friend has
+  // to be before a coincidence alert fires, so it is skipped until that feature
+  // ships. The step's markup is still below, keyed on type === "radius".
+  // {
+  //   emoji: "🔔", title: "Notification radius", color: SKY,
+  //   subtitle: "How close should a friend be before we ping you?",
+  //   description: "We'll send a nudge when a free friend enters your radius — no spam, just good timing.",
+  //   cta: "Set Radius",
+  //   type: "radius",
+  // },
   {
     emoji: "👥", title: "Find your people", color: LAVENDER,
     subtitle: "Know someone already on Sidequest?",
     description: "Search a username to add them, or skip and do this later.",
     cta: "Let's Hang →",
-    type: "friends" as const,
+    type: "friends",
   },
 ];
 
 export function OnboardingScreen({ userName, onComplete }: { userName: string; onComplete: () => void }) {
   const [step, setStep]     = useState(0);
-  const [radius, setRadius] = useState(1.5);
+  // Shared with Profile, and saved as you go — this is the same preference.
+  const { radius, setRadius } = useCurrentUser();
 
   // Friend-finder state
   const [term, setTerm]         = useState("");
@@ -156,7 +173,9 @@ export function OnboardingScreen({ userName, onComplete }: { userName: string; o
         <p className={`text-sm text-center leading-relaxed flex-shrink-0 ${onFriends ? "mb-4" : "mb-6"}`}
           style={{ color: MID }}>{s.description}</p>
 
-        {/* Radius step */}
+        {/* COINCIDENCE FEATURE -- radius step. Unreachable while its entry is
+            commented out of ONBOARDING_STEPS_NEW; kept so the step can be put
+            back by uncommenting that one object. */}
         {s.type === "radius" && (
           <div className="rounded-3xl p-5 mb-4" style={{ background: WHITE, boxShadow: "0 2px 16px rgba(0,0,0,0.06)" }}>
             <div className="flex items-center justify-between mb-4">
@@ -165,31 +184,8 @@ export function OnboardingScreen({ userName, onComplete }: { userName: string; o
                 <span className="text-base font-extrabold" style={{ color: s.color }}>{radius} mi</span>
               </div>
             </div>
-            {/* Custom slider */}
-            <div className="relative mb-3">
-              <div className="h-3 rounded-full w-full" style={{ background: CARD }} />
-              <div className="absolute top-0 left-0 h-3 rounded-full pointer-events-none"
-                style={{ width: `${((radius - 0.5) / (5 - 0.5)) * 100}%`, background: `linear-gradient(90deg, ${SKY}, ${LAVENDER})` }} />
-              <div className="absolute top-1/2 -translate-y-1/2 w-6 h-6 rounded-full shadow-md pointer-events-none"
-                style={{
-                  left: `calc(${((radius - 0.5) / (5 - 0.5)) * 100}% - 12px)`,
-                  background: WHITE, border: `3px solid ${SKY}`,
-                  boxShadow: `0 2px 8px ${SKY}50`,
-                }} />
-              <input type="range" min={0.5} max={5} step={0.5} value={radius}
-                onChange={(e) => setRadius(parseFloat(e.target.value))}
-                className="absolute inset-0 w-full opacity-0 cursor-pointer"
-                style={{ height: "100%" }} />
-            </div>
-            <div className="flex justify-between px-1 mb-3">
-              {[0.5, 1, 2, 3, 4, 5].map((v) => (
-                <div key={v} className="flex flex-col items-center gap-1">
-                  <div className="w-0.5 h-1.5 rounded-full" style={{ background: radius >= v ? SKY : LIGHT }} />
-                  <span className="text-xs font-bold" style={{ color: radius === v ? SKY : LIGHT }}>{v}</span>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-center" style={{ color: LIGHT }}>
+            <RadiusSlider value={radius} onChange={setRadius} />
+            <p className="text-xs text-center mt-3" style={{ color: LIGHT }}>
               Friends within <strong style={{ color: DARK }}>{radius} miles</strong> who are free will trigger a ping
             </p>
           </div>

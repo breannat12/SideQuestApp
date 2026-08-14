@@ -7,10 +7,11 @@ import { INITIAL_GROUPS } from "../../data/groups";
 import { PLANS } from "../../data/plans";
 import type { Plan } from "../../types";
 
-// Fake distance values so we can sort
-const PLAN_DISTANCES: Record<number, number> = { 1: 0.3, 2: 0.6, 3: 1.1, 4: 0.8, 5: 1.4, 6: 1.0 };
+// Fake distance values so we can sort. Keyed by the seeded plans' ids, which
+// are strings now that a real plan's id is its Firestore document id.
+const PLAN_DISTANCES: Record<string, number> = { "1": 0.3, "2": 0.6, "3": 1.1, "4": 0.8, "5": 1.4, "6": 1.0 };
 // Minutes-from-now values for "soon" sort
-const PLAN_MINUTES: Record<number, number>   = { 1: 0, 2: 45, 3: 135, 4: 300, 5: 480, 6: 420 };
+const PLAN_MINUTES: Record<string, number>   = { "1": 0, "2": 45, "3": 135, "4": 300, "5": 480, "6": 420 };
 
 export function ExploreTab({ onPlanTap, onSuggest }: {
   onPlanTap: (p: Plan) => void;

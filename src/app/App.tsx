@@ -1,12 +1,13 @@
 import { Bell, Compass, Home, Plus, User, Users } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NotifDrawer } from "./components/sheets/NotifDrawer";
 import { PlanDetailSheet } from "./components/sheets/PlanDetailSheet";
 import { SuggestSheet } from "./components/sheets/SuggestSheet";
-import { BG, CORAL, LAVENDER, MID, SKY, WHITE } from "./constants/colors";
+import { BG, CORAL, DARK, LAVENDER, MID, SKY, WHITE } from "./constants/colors";
 import { CurrentUserProvider, useCurrentUser } from "./data/currentUser";
 import { NOTIFS } from "./data/notifs";
 import { CreateProfileScreen } from "./screens/CreateProfileScreen";
+import { LoginScreen } from "./screens/LoginScreen";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
 import { SignupScreen } from "./screens/SignupScreen";
 import { CreateTab } from "./screens/tabs/CreateTab";
@@ -36,14 +37,26 @@ export default function App() {
 }
 
 function AppShell() {
-  const [screen, setScreen]           = useState<Screen>("welcome");
+  const [screen, setScreen]           = useState<Screen>("loading");
   const [tab, setTab]                 = useState<Tab>("home");
   const [notifOpen, setNotifOpen]     = useState(false);
   const [detailPlan, setDetailPlan]   = useState<Plan | null>(null);
   const [suggestPlan, setSuggestPlan] = useState<Plan | null>(null);
-  const { name: userName } = useCurrentUser();
+  const { name: userName, status, hasProfile } = useCurrentUser();
 
   const unread = NOTIFS.filter((n) => !n.read).length;
+
+  // Boot routing. Fires once, the moment Firebase says whether a session
+  // survived: a finished account goes straight in, one that stopped partway
+  // resumes at profile setup, and everyone else meets the welcome screen.
+  // After this the user drives navigation, so it must not run again — logging
+  // out, for instance, sets the screen itself.
+  const booted = useRef(false);
+  useEffect(() => {
+    if (booted.current || status === "loading") return;
+    booted.current = true;
+    setScreen(status === "signedOut" ? "welcome" : hasProfile ? "app" : "createProfile");
+  }, [status, hasProfile]);
 
   const openSuggest = (p: Plan) => {
     setDetailPlan(null);
@@ -64,11 +77,24 @@ function AppShell() {
       }}>
 
         {/* Pre-app screens */}
+        {screen === "loading" && (
+          <div className="absolute inset-0 z-50"><SplashScreen /></div>
+        )}
         {screen === "welcome" && (
           <div className="absolute inset-0 z-50">
             <WelcomeScreen
               onSignUp={() => setScreen("signup")}
-              onLogIn={() => setScreen("onboarding")}
+              onLogIn={() => setScreen("login")}
+            />
+          </div>
+        )}
+        {screen === "login" && (
+          <div className="absolute inset-0 z-50">
+            <LoginScreen
+              onLoggedIn={() => setScreen("app")}
+              onNeedsProfile={() => setScreen("createProfile")}
+              onSignUp={() => setScreen("signup")}
+              onBack={() => setScreen("welcome")}
             />
           </div>
         )}
@@ -129,7 +155,9 @@ function AppShell() {
           {tab === "explore" && <ExploreTab onPlanTap={setDetailPlan} onSuggest={openSuggest} />}
           {tab === "create"  && <CreateTab  onCreated={() => setTab("home")} />}
           {tab === "friends" && <FriendsTab />}
-          {tab === "profile" && <ProfileTab />}
+          {tab === "profile" && (
+            <ProfileTab onSignedOut={() => { setTab("home"); setScreen("welcome"); }} />
+          )}
         </div>
 
         {/* Bottom nav */}
@@ -161,6 +189,24 @@ function AppShell() {
             );
           })}
         </div>
+    </div>
+  );
+}
+
+/**
+ * Held for the moment Firebase takes to report an existing session. Without it
+ * someone already signed in watches the welcome screen flash past on every load.
+ */
+function SplashScreen() {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ background: BG }}>
+      <div className="w-24 h-24 rounded-[2rem] flex items-center justify-center"
+        style={{ background: `linear-gradient(135deg, ${SKY}, ${LAVENDER})`, boxShadow: `0 12px 32px ${SKY}50` }}>
+        <span className="text-4xl">🤙</span>
+      </div>
+      <h1 className="text-2xl font-extrabold mt-5" style={{ color: DARK, letterSpacing: "-0.03em" }}>
+        sidequest
+      </h1>
     </div>
   );
 }
