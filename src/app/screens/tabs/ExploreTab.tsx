@@ -3,7 +3,7 @@ import { useState } from "react";
 import { PlanCard } from "../../components/plans/PlanCard";
 import { BG, CARD, DARK, LIGHT, MID, SKY, WHITE } from "../../constants/colors";
 import { ACTIVITIES } from "../../data/activities";
-import { INITIAL_GROUPS } from "../../data/groups";
+import { useMyGroups } from "../../data/groups";
 import { PLANS } from "../../data/plans";
 import type { Plan } from "../../types";
 
@@ -17,15 +17,20 @@ export function ExploreTab({ onPlanTap, onSuggest }: {
   onPlanTap: (p: Plan) => void;
   onSuggest: (p: Plan) => void;
 }) {
+  const { groups } = useMyGroups();
   const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
   const [viewMode, setViewMode]                  = useState<"list" | "map">("list");
   const [selectedGroup, setSelectedGroup]        = useState<string | null>(null);
   const [sortBy, setSortBy]                      = useState<"distance" | "time">("distance");
 
+  // A group deleted while its chip was active would otherwise keep filtering
+  // the list from behind a row that's no longer on screen.
+  const groupFilter = groups.some((g) => g.name === selectedGroup) ? selectedGroup : null;
+
   const filtered = PLANS
     .filter((p) => {
       const actMatch = !selectedActivity || p.emoji === ACTIVITIES.find((a) => a.label === selectedActivity)?.emoji;
-      const grpMatch = !selectedGroup || p.group === selectedGroup;
+      const grpMatch = !groupFilter || p.group === groupFilter;
       return actMatch && grpMatch;
     })
     .slice()
@@ -56,9 +61,11 @@ export function ExploreTab({ onPlanTap, onSuggest }: {
             );
           })}
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-3" style={{ scrollbarWidth: "none" }}>
-          {["All", ...INITIAL_GROUPS.map((g) => g.name)].map((g) => {
-            const active = (g === "All" && !selectedGroup) || selectedGroup === g;
+        {/* Nothing but "All" until you've made a group, so the row hides itself. */}
+        <div className="flex gap-2 overflow-x-auto pb-3" style={{ scrollbarWidth: "none",
+          display: groups.length ? undefined : "none" }}>
+          {["All", ...groups.map((g) => g.name)].map((g) => {
+            const active = (g === "All" && !groupFilter) || groupFilter === g;
             return (
               <button key={g} onClick={() => setSelectedGroup(g === "All" ? null : g)}
                 className="px-3 py-1 rounded-full text-xs font-bold flex-shrink-0 transition-all"

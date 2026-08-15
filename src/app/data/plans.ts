@@ -1,10 +1,13 @@
 import {
   addDoc,
   collection,
+  doc,
   onSnapshot,
+  type FieldValue,
   query,
   serverTimestamp,
   Timestamp,
+  updateDoc,
   where,
 } from "firebase/firestore";
 import { CORAL, LAVENDER, MINT, PEACH, SKY } from "../constants/colors";
@@ -96,6 +99,29 @@ export async function createPlan(plan: NewPlan, hostName: string): Promise<void>
     flexLoc:   plan.flexLoc,
     createdAt: serverTimestamp(),
   });
+}
+
+/** What the edit sheet is allowed to change on a plan you host. */
+export interface PlanEdit {
+  timeLabel?: string;
+  startsAt?: Date;
+  location?: string;
+}
+
+/**
+ * Moves a plan you host. Only time and place: everything else about a plan is
+ * settled once it's out, and the rules only let its host through anyway.
+ */
+export async function updatePlan(id: string, edit: PlanEdit): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) throw new Error("not-signed-in");
+
+  const patch: Record<string, string | Timestamp | FieldValue> = { updatedAt: serverTimestamp() };
+  if (edit.timeLabel !== undefined) patch.timeLabel = edit.timeLabel;
+  if (edit.startsAt  !== undefined) patch.startsAt  = Timestamp.fromDate(edit.startsAt);
+  if (edit.location  !== undefined) patch.location  = edit.location;
+
+  await updateDoc(doc(db, "plans", id), patch);
 }
 
 /**

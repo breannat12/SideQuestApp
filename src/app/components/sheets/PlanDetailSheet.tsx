@@ -69,7 +69,7 @@ export function PlanDetailSheet({ plan, onClose, onSuggest }: { plan: Plan; onCl
               <button onClick={onSuggest}
                 className="px-4 py-3.5 rounded-2xl font-extrabold text-sm flex items-center gap-1.5"
                 style={{ background: LAVENDER + "20", color: LAVENDER }}>
-                <Pencil size={14} /> Suggest
+                <Pencil size={14} /> {plan.host === "You" ? "Edit" : "Suggest"}
               </button>
               <button className="w-12 h-12 rounded-2xl flex items-center justify-center self-center"
                 style={{ background: CARD }}>

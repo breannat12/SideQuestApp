@@ -2,6 +2,7 @@ import { Bell, Compass, Home, Plus, User, Users } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NotifDrawer } from "./components/sheets/NotifDrawer";
 import { PlanDetailSheet } from "./components/sheets/PlanDetailSheet";
+import { EditPlanSheet } from "./components/sheets/EditPlanSheet";
 import { SuggestSheet } from "./components/sheets/SuggestSheet";
 import { BG, CORAL, DARK, LAVENDER, MID, SKY, WHITE } from "./constants/colors";
 import { CurrentUserProvider, useCurrentUser } from "./data/currentUser";
@@ -132,9 +133,12 @@ function AppShell() {
           />
         )}
 
-        {/* Suggest sheet */}
+        {/* Change sheet — yours is an edit that saves, anyone else's is a
+            suggestion sent to whoever hosts it. */}
         {suggestPlan && (
-          <SuggestSheet plan={suggestPlan} onClose={() => setSuggestPlan(null)} />
+          suggestPlan.host === "You"
+            ? <EditPlanSheet plan={suggestPlan} onClose={() => setSuggestPlan(null)} />
+            : <SuggestSheet  plan={suggestPlan} onClose={() => setSuggestPlan(null)} />
         )}
 
         {/* Page content */}

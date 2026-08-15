@@ -1,175 +1,188 @@
-import { ChevronRight, Settings, UserPlus } from "lucide-react";
+import { Pencil, Plus, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 import { AvatarBubble } from "../../components/common/AvatarBubble";
 import { Divider } from "../../components/common/Divider";
-import { StatusDot } from "../../components/common/StatusDot";
-import { ManageGroupsSheet } from "../../components/sheets/ManageGroupsSheet";
-import { BG, CARD, CORAL, DARK, LAVENDER, LIGHT, MID, MINT, SKY, WHITE } from "../../constants/colors";
-import { FRIENDS_DATA } from "../../data/friends";
-import { INITIAL_GROUPS } from "../../data/groups";
+import { BG, CARD, CORAL, DARK, LIGHT, MID, MINT, SKY, WHITE } from "../../constants/colors";
+import { useMyFriends } from "../../data/friends";
+import { useMyGroups } from "../../data/groups";
 import type { Group } from "../../types";
+import { GroupEditorPage } from "../GroupEditorPage";
 import { InvitePage } from "../InvitePage";
 
 export function FriendsTab() {
-  const [groups, setGroups]           = useState<Group[]>(INITIAL_GROUPS);
-  const [activeGroup, setActiveGroup] = useState<string | null>(null);
-  const [manageOpen, setManageOpen]   = useState(false);
-  const [inviteOpen, setInviteOpen]   = useState(false);
-  // busy and DND start collapsed
-  const [collapsed, setCollapsed]     = useState<Record<string, boolean>>({ busy: true, dnd: true });
+  const { friends, loading: loadingFriends, error: friendsError } = useMyFriends();
+  const { groups, error: groupsError } = useMyGroups();
 
-  const toggleCollapse = (status: string) =>
-    setCollapsed((prev) => ({ ...prev, [status]: !prev[status] }));
+  const [activeId, setActiveId]   = useState<string | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  /** A Group edits it, "new" creates one, null means neither is open. */
+  const [editing, setEditing]     = useState<Group | "new" | null>(null);
 
-  const scColor = (s: string) => s === "available" ? MINT : s === "busy" ? CORAL : LIGHT;
-  const scLabel = (s: string) => s === "available" ? "Free" : s === "busy" ? "Busy" : "DND";
+  // A group deleted on another device shouldn't leave the list filtered by it.
+  const activeGroup = groups.find((g) => g.id === activeId) ?? null;
 
   const visible = activeGroup
-    ? FRIENDS_DATA.filter((f) => f.groups.includes(activeGroup))
-    : FRIENDS_DATA;
+    ? friends.filter((f) => activeGroup.memberUids.includes(f.uid))
+    : friends;
 
-  // Show invite page as a full-panel replacement
+  // Full-panel replacements, same as Invite
   if (inviteOpen) return <InvitePage onBack={() => setInviteOpen(false)} />;
+  if (editing) {
+    return (
+      <GroupEditorPage
+        group={editing === "new" ? undefined : editing}
+        onBack={() => setEditing(null)}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col h-full relative" style={{ background: BG }}>
-      {manageOpen && (
-        <ManageGroupsSheet
-          groups={groups}
-          onClose={() => setManageOpen(false)}
-          onChange={setGroups}
-        />
-      )}
-
       {/* Header */}
       <div className="px-5 pt-5 pb-3 flex items-center justify-between flex-shrink-0">
         <h1 className="text-2xl font-extrabold" style={{ color: DARK }}>Friends</h1>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setManageOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold"
-            style={{ background: LAVENDER + "20", color: LAVENDER }}>
-            <Settings size={13} /> Manage
-          </button>
-          <button onClick={() => setInviteOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold"
-            style={{ background: SKY + "20", color: SKY }}>
-            <UserPlus size={13} /> Invite
-          </button>
-        </div>
+        <button onClick={() => setInviteOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold"
+          style={{ background: SKY + "20", color: SKY }}>
+          <UserPlus size={13} /> Invite
+        </button>
       </div>
 
-      {/* Groups grid */}
+      {/* Groups */}
       <div className="px-5 mb-3 flex-shrink-0">
         <p className="text-xs font-extrabold mb-2" style={{ color: MID }}>GROUPS</p>
-        <div className="grid grid-cols-4 gap-2">
-          {groups.map((g) => {
-            const active = activeGroup === g.name;
-            return (
-              <button key={g.name} onClick={() => setActiveGroup(active ? null : g.name)}
-                className="flex flex-col items-center gap-1 p-2.5 rounded-2xl transition-all"
-                style={{
-                  background: active ? g.color + "22" : CARD,
-                  border: active ? `2px solid ${g.color}` : "2px solid transparent",
-                }}>
-                <span className="text-xl">{g.emoji}</span>
-                <span className="text-xs font-extrabold leading-tight text-center" style={{ color: active ? DARK : MID }}>
-                  {g.name}
-                </span>
-                <span className="text-xs" style={{ color: LIGHT }}>{g.count}</span>
-              </button>
-            );
-          })}
-        </div>
+
+        {groupsError && (
+          <p className="text-xs font-bold mb-2" style={{ color: CORAL }}>{groupsError}</p>
+        )}
+
+        {groups.length === 0 ? (
+          /* Nothing to filter by yet, so the invitation takes the whole row. */
+          <button onClick={() => setEditing("new")}
+            className="w-full flex items-center gap-3 p-3.5 rounded-2xl transition-all"
+            style={{ border: `2px dashed ${SKY}80`, background: SKY + "0C" }}>
+            <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
+              style={{ background: SKY + "20" }}>
+              <Plus size={18} strokeWidth={3} style={{ color: SKY }} />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-extrabold" style={{ color: DARK }}>Create group</p>
+              <p className="text-xs" style={{ color: MID }}>
+                Bundle friends together to plan with them faster
+              </p>
+            </div>
+          </button>
+        ) : (
+          <div className="grid grid-cols-4 gap-2">
+            {groups.map((g) => {
+              const active = activeId === g.id;
+              return (
+                <button key={g.id} onClick={() => setActiveId(active ? null : g.id)}
+                  className="flex flex-col items-center gap-1 p-2.5 rounded-2xl transition-all"
+                  style={{
+                    background: active ? g.color + "22" : CARD,
+                    border: active ? `2px solid ${g.color}` : "2px solid transparent",
+                  }}>
+                  <span className="text-xl">{g.emoji}</span>
+                  <span className="text-xs font-extrabold leading-tight text-center truncate w-full"
+                    style={{ color: active ? DARK : MID }}>
+                    {g.name}
+                  </span>
+                  <span className="text-xs" style={{ color: LIGHT }}>{g.memberUids.length}</span>
+                </button>
+              );
+            })}
+
+            {/* Same dotted card, sized to sit in the grid beside the groups. */}
+            <button onClick={() => setEditing("new")}
+              className="flex flex-col items-center justify-center gap-1 p-2.5 rounded-2xl transition-all"
+              style={{ border: `2px dashed ${SKY}80`, background: SKY + "0C" }}>
+              <Plus size={18} strokeWidth={3} style={{ color: SKY }} />
+              <span className="text-xs font-extrabold leading-tight text-center" style={{ color: SKY }}>
+                Create group
+              </span>
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Section divider */}
+      {/* Section divider — carries the edit affordance for the active group */}
       <div className="px-5 mb-3 flex-shrink-0">
-        <Divider label={activeGroup ? `${activeGroup} · ${visible.length} friends` : `All Friends · ${visible.length}`} />
+        <Divider label={activeGroup
+          ? `${activeGroup.name} · ${visible.length} of ${activeGroup.memberUids.length}`
+          : `All Friends · ${friends.length}`} />
+        {activeGroup && (
+          <div className="flex justify-end mt-1.5">
+            <button onClick={() => setEditing(activeGroup)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-extrabold"
+              style={{ background: activeGroup.color + "20", color: activeGroup.color }}>
+              <Pencil size={11} /> Edit group
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Friends list */}
       <div className="flex-1 overflow-y-auto px-5 pb-4" style={{ scrollbarWidth: "none" }}>
-        {["available", "busy", "dnd"].map((status) => {
-          const group = visible.filter((f) => f.status === status);
-          if (!group.length) return null;
-          const isCollapsible = status !== "available";
-          const isCollapsed   = isCollapsible && collapsed[status];
-          const emoji = status === "available" ? "🟢" : status === "busy" ? "🔴" : "🔕";
-          const label = status === "available" ? "Free now" : status === "busy" ? "Busy" : "Do not disturb";
+        {friendsError && (
+          <p className="text-xs font-bold px-1 py-2" style={{ color: CORAL }}>{friendsError}</p>
+        )}
 
+        {loadingFriends && !friends.length && (
+          <p className="text-xs font-bold px-1 py-2" style={{ color: LIGHT }}>Loading your friends…</p>
+        )}
+
+        {!loadingFriends && friends.length === 0 && (
+          <div className="rounded-2xl p-5 text-center"
+            style={{ background: WHITE, border: "1px solid rgba(0,0,0,0.06)" }}>
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-2.5"
+              style={{ background: SKY + "20" }}>
+              <Users size={20} style={{ color: SKY }} />
+            </div>
+            <p className="text-sm font-extrabold mb-1" style={{ color: DARK }}>No friends yet</p>
+            <p className="text-xs mb-4" style={{ color: MID }}>
+              Find people by their username and they'll show up here.
+            </p>
+            <button onClick={() => setInviteOpen(true)}
+              className="px-4 py-2.5 rounded-2xl text-sm font-extrabold text-white"
+              style={{ background: `linear-gradient(135deg, ${MINT}, ${SKY})` }}>
+              Find friends
+            </button>
+          </div>
+        )}
+
+        {/* An emptied group reads as a mistake unless it says so. */}
+        {activeGroup && friends.length > 0 && visible.length === 0 && (
+          <div className="rounded-2xl p-4 text-center"
+            style={{ background: WHITE, border: "1px solid rgba(0,0,0,0.06)" }}>
+            <p className="text-sm font-extrabold mb-0.5" style={{ color: DARK }}>Nobody in here yet</p>
+            <p className="text-xs" style={{ color: MID }}>Tap Edit group to add friends to {activeGroup.name}.</p>
+          </div>
+        )}
+
+        {visible.map((f) => {
+          // Chips for every group this person is in — the reverse of the filter.
+          const memberOf = groups.filter((g) => g.memberUids.includes(f.uid));
           return (
-            <div key={status} className="mb-4">
-              {/* Section header — clickable for busy/dnd */}
-              <button
-                onClick={() => isCollapsible && toggleCollapse(status)}
-                className="w-full flex items-center justify-between mb-2 px-0.5"
-                style={{ cursor: isCollapsible ? "pointer" : "default" }}
-              >
-                <p className="text-xs font-extrabold tracking-wide uppercase flex items-center gap-1.5" style={{ color: MID }}>
-                  {emoji} {label} <span className="text-xs font-bold px-1.5 py-0.5 rounded-full"
-                    style={{ background: scColor(status) + "18", color: scColor(status) }}>{group.length}</span>
-                </p>
-                {isCollapsible && (
-                  <div className="flex items-center gap-1 text-xs font-bold" style={{ color: LIGHT }}>
-                    {isCollapsed ? "Show" : "Hide"}
-                    <div style={{ transform: isCollapsed ? "rotate(0deg)" : "rotate(180deg)", transition: "transform 0.2s" }}>
-                      <ChevronRight size={13} style={{ transform: "rotate(90deg)", color: LIGHT }} />
-                    </div>
-                  </div>
-                )}
-              </button>
-
-              {/* Collapsed summary row */}
-              {isCollapsed ? (
-                <button onClick={() => toggleCollapse(status)}
-                  className="w-full flex items-center gap-2 py-2.5 px-3 rounded-2xl mb-1"
-                  style={{ background: CARD }}>
-                  <div className="flex -space-x-2">
-                    {group.slice(0, 4).map((f) => (
-                      <div key={f.name} className="rounded-full border-2 border-white opacity-60">
-                        <AvatarBubble i={f.avatar} color={f.color} size={28} />
-                      </div>
+            <div key={f.uid} className="flex items-center gap-3 p-3 rounded-2xl mb-2"
+              style={{ background: WHITE, border: "1px solid rgba(0,0,0,0.06)" }}>
+              <AvatarBubble i={f.avatar} color={f.color} size={44} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-extrabold" style={{ color: DARK }}>{f.name}</p>
+                {f.username && <p className="text-xs truncate" style={{ color: MID }}>@{f.username}</p>}
+                {memberOf.length > 0 && (
+                  <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                    {memberOf.map((g) => (
+                      <span key={g.id} className="text-xs px-1.5 py-0.5 rounded-md font-bold"
+                        style={{ background: g.color + "20", color: g.color }}>
+                        {g.emoji} {g.name}
+                      </span>
                     ))}
                   </div>
-                  <span className="text-xs font-bold" style={{ color: MID }}>
-                    {group.map((f) => f.name.split(" ")[0]).join(", ")}
-                  </span>
-                  <span className="ml-auto text-xs font-bold" style={{ color: LIGHT }}>tap to expand</span>
-                </button>
-              ) : (
-                group.map((f) => (
-                  <div key={f.name} className="flex items-center gap-3 p-3 rounded-2xl mb-2"
-                    style={{ background: WHITE, border: "1px solid rgba(0,0,0,0.06)", opacity: status !== "available" ? 0.85 : 1 }}>
-                    <div className="relative">
-                      <AvatarBubble i={f.avatar} color={f.color} size={44} />
-                      <div className="absolute -bottom-0.5 -right-0.5"><StatusDot status={f.status} /></div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-extrabold" style={{ color: DARK }}>{f.name}</p>
-                      <p className="text-xs truncate" style={{ color: MID }}>{f.activity}</p>
-                      <div className="flex items-center gap-1 mt-0.5">
-                        {f.groups.map((g) => (
-                          <span key={g} className="text-xs px-1.5 py-0.5 rounded-md font-bold"
-                            style={{ background: (groups.find((gr) => gr.name === g)?.color ?? CARD) + "20",
-                                     color: groups.find((gr) => gr.name === g)?.color ?? MID }}>
-                            {g}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1.5">
-                      <span className="text-xs font-extrabold px-2 py-0.5 rounded-full"
-                        style={{ background: scColor(f.status) + "20", color: scColor(f.status) }}>
-                        {scLabel(f.status)}
-                      </span>
-                      {f.status === "available" && (
-                        <button className="text-xs font-extrabold px-2.5 py-1 rounded-xl"
-                          style={{ background: MINT + "20", color: MINT }}>Ping! 👋</button>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
+                )}
+              </div>
+              <button className="text-xs font-extrabold px-2.5 py-1 rounded-xl flex-shrink-0"
+                style={{ background: MINT + "20", color: MINT }}>Ping! 👋</button>
             </div>
           );
         })}

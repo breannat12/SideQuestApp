@@ -29,6 +29,12 @@ service cloud.firestore {
       match /friends/{friendUid} {
         allow read, write: if isOwner(uid);
       }
+
+      // Groups you've sorted those friends into. Also private: a group is your
+      // own shorthand for who to invite, not something its members can see.
+      match /groups/{groupId} {
+        allow read, write: if isOwner(uid);
+      }
     }
 
     // Handle reservations. Readable so a taken handle can be detected, and

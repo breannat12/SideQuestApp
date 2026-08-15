@@ -46,13 +46,25 @@ export interface Notif {
 //   distance: string; status: string; location: string; time: string;
 // }
 
+/** A group you made, as stored in `users/{uid}/groups/{groupId}`. */
 export interface Group {
-  name: string; count: number; emoji: string; color: string;
+  id: string; name: string; emoji: string; color: string;
+  /** Friend uids. The member count is just its length. */
+  memberUids: string[];
+  /** Absent for the instant between a local write and the server's reply. */
+  createdAt?: Date;
 }
 
+/** What the group editor collects, before it becomes a stored group. */
+export interface NewGroup {
+  name: string; emoji: string; color: string; memberUids: string[];
+}
+
+/** Someone you've added, from `users/{uid}/friends/{friendUid}`. */
 export interface Friend {
-  name: string; avatar: string; status: FriendStatus;
-  activity: string; color: string; lastSeen: string; groups: string[];
+  uid: string; name: string; username: string;
+  /** Initials for the avatar bubble, and a colour picked from their uid. */
+  avatar: string; color: string;
 }
 
 /** A real signed-up person, as stored in the `users` collection. */
