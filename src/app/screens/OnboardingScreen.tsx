@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { RadiusSlider } from "../components/common/RadiusSlider";
 import { BG, CARD, CORAL, DARK, LAVENDER, LIGHT, MID, MINT, PEACH, SKY, WHITE } from "../constants/colors";
 import { useCurrentUser } from "../data/currentUser";
-import { addFriends, searchUsersByUsername } from "../data/users";
+import { sendFriendRequests } from "../data/friendRequests";
+import { searchUsersByUsername } from "../data/users";
 import type { DirectoryUser } from "../types";
 
 /** Avatar colors, picked off the handle so a person keeps the same one. */
@@ -61,7 +62,7 @@ const ONBOARDING_STEPS_NEW: OnboardingStep[] = [
 export function OnboardingScreen({ userName, onComplete }: { userName: string; onComplete: () => void }) {
   const [step, setStep]     = useState(0);
   // Shared with Profile, and saved as you go — this is the same preference.
-  const { radius, setRadius } = useCurrentUser();
+  const { radius, setRadius, handle } = useCurrentUser();
 
   // Friend-finder state
   const [term, setTerm]         = useState("");
@@ -113,17 +114,17 @@ export function OnboardingScreen({ userName, onComplete }: { userName: string; o
     navigator.geolocation.getCurrentPosition(next, next, { timeout: 8000 });
   };
 
-  /** Saves the picks (if any) before handing control back to the app. */
+  /** Sends a request to each pick (if any) before handing control back. */
   const finish = async () => {
     if (saving) return;
     if (!picked.length) return onComplete();
     setSaving(true);
     setSaveError("");
     try {
-      await addFriends(picked);
+      await sendFriendRequests(picked, userName, handle);
       onComplete();
     } catch {
-      setSaveError("Couldn't add those friends. Try again or skip for now.");
+      setSaveError("Couldn't send those requests. Try again or skip for now.");
       setSaving(false);
     }
   };
@@ -322,9 +323,9 @@ export function OnboardingScreen({ userName, onComplete }: { userName: string; o
           className="w-full py-4 rounded-2xl text-white font-extrabold text-base transition-all"
           style={{ background: `linear-gradient(135deg, ${s.color}, ${s.color === SKY ? LAVENDER : SKY})`, boxShadow: `0 8px 20px ${s.color}35`, opacity: saving ? 0.6 : 1 }}>
           {saving
-            ? "Adding friends…"
+            ? "Sending requests…"
             : onFriends && picked.length
-              ? `Add ${picked.length} friend${picked.length > 1 ? "s" : ""} →`
+              ? `Send ${picked.length} request${picked.length > 1 ? "s" : ""} →`
               : s.cta}
         </button>
         {onFriends ? (

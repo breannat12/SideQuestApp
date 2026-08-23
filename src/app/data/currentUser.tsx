@@ -28,6 +28,8 @@ export type AuthStatus = "loading" | "signedOut" | "signedIn";
 
 interface CurrentUserValue {
   status: AuthStatus;
+  /** Firebase uid, or "" while signed out. Identifies you in shared documents. */
+  uid: string;
   /** A saved name is the test for "finished signing up", not just "signed in". */
   hasProfile: boolean;
   /** Full name as typed on Create Profile. Empty until the profile is saved. */
@@ -59,6 +61,7 @@ const deriveInitials = (name: string) => {
 
 const CurrentUserContext = createContext<CurrentUserValue>({
   status: "loading",
+  uid: "",
   hasProfile: false,
   name: "",
   handle: "",
@@ -71,6 +74,7 @@ const CurrentUserContext = createContext<CurrentUserValue>({
 
 export function CurrentUserProvider({ children }: { children: ReactNode }) {
   const [status, setStatus]        = useState<AuthStatus>("loading");
+  const [uid, setUid]              = useState("");
   const [profile, setProfileState] = useState({ name: "", handle: "" });
   const [radius, setRadiusState]   = useState(RADIUS_DEFAULT);
 
@@ -101,11 +105,14 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
         // Drop any queued write too, so a radius set moments before signing out
         // can't land on the next account to sign in.
         cancelPendingSave();
+        setUid("");
         setProfileState({ name: "", handle: "" });
         setRadiusState(RADIUS_DEFAULT);
         setStatus("signedOut");
         return;
       }
+
+      setUid(user.uid);
 
       let stored = { name: user.displayName ?? "", handle: "" };
       try {
@@ -127,6 +134,7 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<CurrentUserValue>(() => ({
     status,
+    uid,
     hasProfile: Boolean(profile.name),
     name:      profile.name,
     handle:    profile.handle,
@@ -136,7 +144,7 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
     setProfile: (name, handle) =>
       setProfileState({ name: name.trim(), handle: handle.trim().toLowerCase() }),
     setRadius,
-  }), [status, profile, radius, setRadius]);
+  }), [status, uid, profile, radius, setRadius]);
 
   return <CurrentUserContext.Provider value={value}>{children}</CurrentUserContext.Provider>;
 }

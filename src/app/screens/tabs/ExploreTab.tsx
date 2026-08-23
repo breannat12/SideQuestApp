@@ -1,33 +1,39 @@
-import { Clock, List, Map, MapPin, Search } from "lucide-react";
+import { Clock, MapPin, Search } from "lucide-react";
 import { useState } from "react";
 import { PlanCard } from "../../components/plans/PlanCard";
-import { BG, CARD, DARK, LIGHT, MID, SKY, WHITE } from "../../constants/colors";
+import { BG, CARD, CORAL, DARK, LIGHT, MID, SKY, WHITE } from "../../constants/colors";
 import { ACTIVITIES } from "../../data/activities";
+import { useMyFriends } from "../../data/friends";
 import { useMyGroups } from "../../data/groups";
-import { PLANS } from "../../data/plans";
+import { usePlanFeed } from "../../data/planFeed";
 import type { Plan } from "../../types";
 
-// Fake distance values so we can sort. Keyed by the seeded plans' ids, which
-// are strings now that a real plan's id is its Firestore document id.
-const PLAN_DISTANCES: Record<string, number> = { "1": 0.3, "2": 0.6, "3": 1.1, "4": 0.8, "5": 1.4, "6": 1.0 };
-// Minutes-from-now values for "soon" sort
-const PLAN_MINUTES: Record<string, number>   = { "1": 0, "2": 45, "3": 135, "4": 300, "5": 480, "6": 420 };
-
-export function ExploreTab({ onPlanTap, onSuggest }: {
+// SUGGEST CHANGES CODE: this also took `onSuggest: (p: Plan) => void`, passed
+// down to each card. Everything on this tab is someone else's plan, so there is
+// nothing left here to suggest a change to.
+export function ExploreTab({ onPlanTap }: {
   onPlanTap: (p: Plan) => void;
-  onSuggest: (p: Plan) => void;
 }) {
   const { groups } = useMyGroups();
+  const { friends } = useMyFriends();
+  const { friendPlans, loading, isJoined, pendingId, toggleJoin, joinError,
+          myCoords, locating } = usePlanFeed();
+
   const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
-  const [viewMode, setViewMode]                  = useState<"list" | "map">("list");
-  const [selectedGroup, setSelectedGroup]        = useState<string | null>(null);
-  const [sortBy, setSortBy]                      = useState<"distance" | "time">("distance");
+  const [selectedGroup, setSelectedGroup]       = useState<string | null>(null);
+  const [sortBy, setSortBy]                     = useState<"distance" | "time">("time");
 
   // A group deleted while its chip was active would otherwise keep filtering
   // the list from behind a row that's no longer on screen.
   const groupFilter = groups.some((g) => g.name === selectedGroup) ? selectedGroup : null;
 
-  const filtered = PLANS
+  // Distance needs your position *and* the plan's, so it's only offered once
+  // we have yours; a plan whose location was typed rather than picked has no
+  // coordinates and sorts to the end rather than pretending to be at zero.
+  const canSortByDistance = Boolean(myCoords);
+  const sorting = canSortByDistance ? sortBy : "time";
+
+  const filtered = friendPlans
     .filter((p) => {
       const actMatch = !selectedActivity || p.emoji === ACTIVITIES.find((a) => a.label === selectedActivity)?.emoji;
       const grpMatch = !groupFilter || p.group === groupFilter;
@@ -35,10 +41,12 @@ export function ExploreTab({ onPlanTap, onSuggest }: {
     })
     .slice()
     .sort((a, b) =>
-      sortBy === "distance"
-        ? (PLAN_DISTANCES[a.id] ?? 99) - (PLAN_DISTANCES[b.id] ?? 99)
-        : (PLAN_MINUTES[a.id]  ?? 9999) - (PLAN_MINUTES[b.id]  ?? 9999)
+      sorting === "distance"
+        ? (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity)
+        : (a.startsAt?.getTime() ?? 0) - (b.startsAt?.getTime() ?? 0)
     );
+
+  const filtering = Boolean(selectedActivity || groupFilter);
 
   return (
     <div className="flex flex-col h-full" style={{ background: BG }}>
@@ -77,78 +85,77 @@ export function ExploreTab({ onPlanTap, onSuggest }: {
         </div>
       </div>
 
-      {/* Count + sort + view controls */}
+      {/* Count + sort */}
       <div className="px-5 flex items-center justify-between mb-3 flex-shrink-0">
-        <span className="text-xs font-bold" style={{ color: MID }}>{filtered.length} plans</span>
-        <div className="flex items-center gap-2">
-          {/* Sort toggle */}
-          <div className="flex gap-0.5 p-1 rounded-xl" style={{ background: CARD }}>
-            <button onClick={() => setSortBy("distance")}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-extrabold transition-all"
-              style={{ background: sortBy === "distance" ? WHITE : "transparent", color: sortBy === "distance" ? DARK : MID }}>
-              <MapPin size={11} /> Nearest
-            </button>
-            <button onClick={() => setSortBy("time")}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-extrabold transition-all"
-              style={{ background: sortBy === "time" ? WHITE : "transparent", color: sortBy === "time" ? DARK : MID }}>
-              <Clock size={11} /> Soonest
-            </button>
-          </div>
-          {/* View toggle */}
-          <div className="flex gap-0.5 p-1 rounded-xl" style={{ background: CARD }}>
-            {[{ mode: "list" as const, Icon: List }, { mode: "map" as const, Icon: Map }].map(({ mode, Icon }) => (
-              <button key={mode} onClick={() => setViewMode(mode)} className="p-1.5 rounded-lg transition-all"
-                style={{ background: viewMode === mode ? WHITE : "transparent" }}>
-                <Icon size={14} style={{ color: viewMode === mode ? DARK : MID }} />
-              </button>
-            ))}
-          </div>
+        <span className="text-xs font-bold" style={{ color: MID }}>
+          {loading ? "Loading…" : `${filtered.length} ${filtered.length === 1 ? "plan" : "plans"}`}
+        </span>
+        {/* "Nearest" needs your position, so it stays disabled until we have
+            one rather than silently sorting by nothing. */}
+        <div className="flex gap-0.5 p-1 rounded-xl" style={{ background: CARD }}>
+          <button onClick={() => setSortBy("distance")} disabled={!canSortByDistance}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-extrabold transition-all"
+            style={{
+              background: sorting === "distance" ? WHITE : "transparent",
+              color:      sorting === "distance" ? DARK : MID,
+              opacity:    canSortByDistance ? 1 : 0.45,
+            }}>
+            <MapPin size={11} /> Nearest
+          </button>
+          <button onClick={() => setSortBy("time")}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-extrabold transition-all"
+            style={{ background: sorting === "time" ? WHITE : "transparent", color: sorting === "time" ? DARK : MID }}>
+            <Clock size={11} /> Soonest
+          </button>
         </div>
       </div>
-      {viewMode === "map" ? (
-        <div className="flex-1 mx-5 mb-2 rounded-3xl overflow-hidden relative" style={{ background: "#DFF0F8", minHeight: 0 }}>
-          <div className="absolute inset-0 opacity-30" style={{
-            backgroundImage: "repeating-linear-gradient(0deg,#6EC6FF 0,#6EC6FF 1px,transparent 1px,transparent 48px),repeating-linear-gradient(90deg,#6EC6FF 0,#6EC6FF 1px,transparent 1px,transparent 48px)",
-          }} />
-          <div className="absolute inset-0">
-            <div className="absolute w-full h-0.5 opacity-40 top-1/2" style={{ background: WHITE }} />
-            <div className="absolute h-full w-0.5 opacity-40 left-1/3" style={{ background: WHITE }} />
-            <div className="absolute h-full w-0.5 opacity-40 left-2/3" style={{ background: WHITE }} />
-          </div>
-          {[
-            { top: "28%", left: "22%", plan: PLANS[0] },
-            { top: "48%", left: "58%", plan: PLANS[1] },
-            { top: "60%", left: "30%", plan: PLANS[3] },
-            { top: "20%", left: "68%", plan: PLANS[4] },
-            { top: "70%", left: "70%", plan: PLANS[5] },
-          ].map(({ top, left, plan }) => (
-            <button key={plan.id} onClick={() => onPlanTap(plan)}
-              className="absolute" style={{ top, left, transform: "translate(-50%,-50%)" }}>
-              <div className="w-11 h-11 rounded-full flex items-center justify-center text-xl shadow-lg border-2 border-white"
-                style={{ background: plan.accentColor + "60" }}>{plan.emoji}</div>
-            </button>
-          ))}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-            <div className="w-5 h-5 rounded-full border-white shadow-lg"
-              style={{ background: SKY, outline: `3px solid ${SKY}40` }} />
-          </div>
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
-            style={{ width: 90, height: 90, border: `1.5px dashed ${SKY}60`, marginLeft: -45, marginTop: -45 }} />
-        </div>
-      ) : (
-        <div className="flex-1 overflow-y-auto px-5 pb-4" style={{ scrollbarWidth: "none" }}>
-          {filtered.length === 0 ? (
-            <div className="flex flex-col items-center py-10 gap-3">
-              <span className="text-4xl">🔍</span>
-              <p className="text-sm font-bold" style={{ color: MID }}>No plans match these filters</p>
-              <button onClick={() => { setSelectedActivity(null); setSelectedGroup(null); }}
-                className="text-xs font-extrabold" style={{ color: SKY }}>Clear filters</button>
-            </div>
-          ) : filtered.map((p) => (
-            <PlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onSuggest={() => onSuggest(p)} compact />
-          ))}
-        </div>
+
+      {/* Only worth saying once we've actually tried and failed. */}
+      {!locating && !canSortByDistance && (
+        <p className="px-5 -mt-1 mb-2 text-xs font-bold flex-shrink-0" style={{ color: LIGHT }}>
+          Allow location access to sort by distance.
+        </p>
       )}
+
+      <div className="flex-1 overflow-y-auto px-5 pb-4" style={{ scrollbarWidth: "none" }}>
+        {joinError && (
+          <p className="text-xs font-bold text-center mb-3" style={{ color: CORAL }}>{joinError}</p>
+        )}
+
+        {loading ? (
+          <p className="text-sm font-bold text-center py-12" style={{ color: LIGHT }}>Loading plans…</p>
+        ) : filtered.length > 0 ? (
+          filtered.map((p) => (
+            <PlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} compact
+              onJoin={() => void toggleJoin(p)} joined={isJoined(p)} pending={pendingId === p.id} />
+          ))
+        ) : filtering ? (
+          <div className="flex flex-col items-center py-10 gap-3">
+            <span className="text-4xl">🔍</span>
+            <p className="text-sm font-bold" style={{ color: MID }}>No plans match these filters</p>
+            <button onClick={() => { setSelectedActivity(null); setSelectedGroup(null); }}
+              className="text-xs font-extrabold" style={{ color: SKY }}>Clear filters</button>
+          </div>
+        ) : friends.length === 0 ? (
+          /* Nothing here is a friends problem, not a plans problem — say so,
+             rather than leaving someone waiting on a feed that can't fill. */
+          <div className="flex flex-col items-center py-12 gap-3 text-center">
+            <span className="text-5xl">👋</span>
+            <p className="text-base font-extrabold" style={{ color: DARK }}>No friends yet</p>
+            <p className="text-sm" style={{ color: MID }}>
+              Add friends from the Friends tab. Their plans turn up here once they share one.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center py-12 gap-3 text-center">
+            <span className="text-5xl">🌱</span>
+            <p className="text-base font-extrabold" style={{ color: DARK }}>Nothing on right now</p>
+            <p className="text-sm" style={{ color: MID }}>
+              When a friend shares a plan with you, it lands here. Tap + to start one yourself.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -3,10 +3,15 @@ import { useEffect, useRef, useState } from "react";
 import { NotifDrawer } from "./components/sheets/NotifDrawer";
 import { PlanDetailSheet } from "./components/sheets/PlanDetailSheet";
 import { EditPlanSheet } from "./components/sheets/EditPlanSheet";
-import { SuggestSheet } from "./components/sheets/SuggestSheet";
+// SUGGEST CHANGES CODE: the sheet for proposing a different time or place on a
+// plan someone else hosts. The file is still there, just unreferenced — restore
+// this import alongside the fork further down.
+// import { SuggestSheet } from "./components/sheets/SuggestSheet";
 import { BG, CORAL, DARK, LAVENDER, MID, SKY, WHITE } from "./constants/colors";
 import { CurrentUserProvider, useCurrentUser } from "./data/currentUser";
-import { NOTIFS } from "./data/notifs";
+import { FriendRequestProvider } from "./data/friendRequests";
+import { useNotifs } from "./data/notifs";
+import { PlanFeedProvider } from "./data/planFeed";
 import { CreateProfileScreen } from "./screens/CreateProfileScreen";
 import { LoginScreen } from "./screens/LoginScreen";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
@@ -32,7 +37,13 @@ const NAV: { id: Tab; label: string; icon: typeof Home }[] = [
 export default function App() {
   return (
     <CurrentUserProvider>
-      <AppShell />
+      {/* Inside the user provider: these queries are per-account, and can't
+          subscribe until Firebase has said whose session this is. */}
+      <FriendRequestProvider>
+        <PlanFeedProvider>
+          <AppShell />
+        </PlanFeedProvider>
+      </FriendRequestProvider>
     </CurrentUserProvider>
   );
 }
@@ -42,10 +53,11 @@ function AppShell() {
   const [tab, setTab]                 = useState<Tab>("home");
   const [notifOpen, setNotifOpen]     = useState(false);
   const [detailPlan, setDetailPlan]   = useState<Plan | null>(null);
-  const [suggestPlan, setSuggestPlan] = useState<Plan | null>(null);
+  // SUGGEST CHANGES CODE: was `suggestPlan`, and held anyone's plan. Now only
+  // ever your own, since editing is the one thing left that opens a sheet.
+  const [editPlan, setEditPlan]       = useState<Plan | null>(null);
   const { name: userName, status, hasProfile } = useCurrentUser();
-
-  const unread = NOTIFS.filter((n) => !n.read).length;
+  const { unread } = useNotifs();
 
   // Boot routing. Fires once, the moment Firebase says whether a session
   // survived: a finished account goes straight in, one that stopped partway
@@ -59,9 +71,14 @@ function AppShell() {
     setScreen(status === "signedOut" ? "welcome" : hasProfile ? "app" : "createProfile");
   }, [status, hasProfile]);
 
-  const openSuggest = (p: Plan) => {
+  const openEdit = (p: Plan) => {
+    // SUGGEST CHANGES CODE: this used to take any plan and let the fork below
+    // decide which sheet to show. Guarded now, so a plan you don't host can't
+    // reach the edit sheet by some other route — the rules would reject the
+    // write anyway, and failing silently here beats failing at the server.
+    if (p.host !== "You") return;
     setDetailPlan(null);
-    setSuggestPlan(p);
+    setEditPlan(p);
   };
 
   return (
@@ -125,21 +142,26 @@ function AppShell() {
         {notifOpen && <NotifDrawer onClose={() => setNotifOpen(false)} />}
 
         {/* Plan detail sheet */}
-        {detailPlan && !suggestPlan && (
+        {detailPlan && !editPlan && (
           <PlanDetailSheet
             plan={detailPlan}
             onClose={() => setDetailPlan(null)}
-            onSuggest={() => openSuggest(detailPlan)}
+            onEdit={() => openEdit(detailPlan)}
           />
         )}
 
-        {/* Change sheet — yours is an edit that saves, anyone else's is a
-            suggestion sent to whoever hosts it. */}
-        {suggestPlan && (
-          suggestPlan.host === "You"
-            ? <EditPlanSheet plan={suggestPlan} onClose={() => setSuggestPlan(null)} />
-            : <SuggestSheet  plan={suggestPlan} onClose={() => setSuggestPlan(null)} />
-        )}
+        {/* Edit sheet — your own plan only.
+            SUGGEST CHANGES CODE: this was a fork, with SuggestSheet handling
+            plans hosted by someone else. To bring it back, restore:
+
+              {editPlan && (
+                editPlan.host === "You"
+                  ? <EditPlanSheet plan={editPlan} onClose={() => setEditPlan(null)} />
+                  : <SuggestSheet  plan={editPlan} onClose={() => setEditPlan(null)} />
+              )}
+
+            …and drop the host guard in `openEdit` above. */}
+        {editPlan && <EditPlanSheet plan={editPlan} onClose={() => setEditPlan(null)} />}
 
         {/* Page content */}
         <div className="flex-1 overflow-hidden relative">
@@ -155,8 +177,10 @@ function AppShell() {
             </button>
           )}
 
-          {tab === "home"    && <HomeTab    onPlanTap={setDetailPlan} onSuggest={openSuggest} onBell={() => setNotifOpen(true)} unread={unread} />}
-          {tab === "explore" && <ExploreTab onPlanTap={setDetailPlan} onSuggest={openSuggest} />}
+          {tab === "home"    && <HomeTab    onPlanTap={setDetailPlan} onEdit={openEdit} onBell={() => setNotifOpen(true)} unread={unread} />}
+          {/* SUGGEST CHANGES CODE: Explore lists other people's plans only, so
+              it had `onSuggest={openSuggest}` here. Nothing to hand it now. */}
+          {tab === "explore" && <ExploreTab onPlanTap={setDetailPlan} />}
           {tab === "create"  && <CreateTab  onCreated={() => setTab("home")} />}
           {tab === "friends" && <FriendsTab />}
           {tab === "profile" && (

@@ -25,9 +25,21 @@ service cloud.firestore {
       allow read:  if signedIn();
       allow write: if isOwner(uid);
 
-      // Your friend list, private to you.
+      // Your friend list, private to you — with one exception, below.
       match /friends/{friendUid} {
         allow read, write: if isOwner(uid);
+
+        // Accepting a friend request. The person who was asked writes *themselves*
+        // into the asker's list, which is the only way a friendship can become
+        // mutual without a server to do the second write.
+        //
+        // Narrow on purpose: the document id has to be the caller's own uid, so
+        // they can only ever add themselves, and only while the invitation they
+        // are answering is still pending. `friendUid` is who is being added, so
+        // requiring it to equal `request.auth.uid` is what pins this to "me".
+        allow create: if signedIn()
+                      && request.auth.uid == friendUid
+                      && exists(/databases/$(database)/documents/friendRequests/$(uid + '_' + friendUid));
       }
 
       // Groups you've sorted those friends into. Also private: a group is your
@@ -45,12 +57,72 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
     }
 
-    // Plans. Readable by any signed-in user so a friends' feed can be built on
-    // top later; writable only by whoever hosts them.
+    // Friend requests, at `friendRequests/{fromUid}_{toUid}`.
+    //
+    // The document existing is the whole of the pending state: accepting and
+    // ignoring both delete it. That's why there's no update rule — a request is
+    // never edited, only made and answered.
+    match /friendRequests/{requestId} {
+
+      // Only the two people involved. A request is readable by its recipient so
+      // it can be shown as a notification, and by its sender so the invite
+      // screen can show "Requested".
+      function isParty() {
+        return signedIn()
+               && (resource.data.fromUid == request.auth.uid
+                   || resource.data.toUid == request.auth.uid);
+      }
+
+      allow read: if isParty();
+
+      // You may only send as yourself, only to someone else, and only at the id
+      // derived from the pair — which is what stops the same request being sent
+      // twice, and stops anyone forging a request that appears to be from
+      // someone else.
+      allow create: if signedIn()
+                    && request.resource.data.fromUid == request.auth.uid
+                    && request.resource.data.toUid != request.auth.uid
+                    && requestId == request.auth.uid + '_' + request.resource.data.toUid;
+
+      // The recipient accepting or ignoring, or the sender taking it back.
+      allow delete: if isParty();
+    }
+
+    // Plans. Readable by any signed-in user: a plan carries the uids of the
+    // friends it was sent to, and each of them queries for their own.
+    //
+    // Writable by the host, plus the one narrow exception below that lets an
+    // invited friend put themselves on the roster.
     match /plans/{planId} {
+
+      // A join or a leave: the three attendee fields change and nothing else,
+      // and the only uid that moves is the caller's own.
+      //
+      // Checked by size as well as membership, so a caller can't smuggle a
+      // removal of someone else through alongside adding themselves — adding one
+      // and removing one leaves the size unchanged, which neither branch allows.
+      function isRsvp() {
+        let uid    = request.auth.uid;
+        // `get` with a default, because a plan written before the roster
+        // existed has none of these fields and a bare read would error.
+        let before = resource.data.get('attendeeUids', []);
+        let after  = request.resource.data.get('attendeeUids', []);
+        return uid in resource.data.get('audienceUids', [])
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['attendeeUids', 'attendeeNames', 'joinedAt'])
+          && (
+               // Joining: exactly one uid added, and it's yours.
+               (after.size() == before.size() + 1 && uid in after && !(uid in before))
+               // Leaving: exactly one removed, and it's yours.
+               || (after.size() == before.size() - 1 && !(uid in after) && uid in before)
+             );
+      }
+
       allow read:   if signedIn();
       allow create: if signedIn() && request.resource.data.hostUid == request.auth.uid;
-      allow update, delete: if signedIn() && resource.data.hostUid == request.auth.uid;
+      allow delete: if signedIn() && resource.data.hostUid == request.auth.uid;
+      allow update: if signedIn()
+                    && (resource.data.hostUid == request.auth.uid || isRsvp());
     }
   }
 }

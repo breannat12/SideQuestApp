@@ -1,11 +1,22 @@
 import { Clock, MapPin, MessageCircle, Pencil, Share2, Users, X } from "lucide-react";
-import { useState } from "react";
-import { CARD, DARK, LAVENDER, MID, MINT, SKY, WHITE } from "../../constants/colors";
+import { CARD, CORAL, DARK, LAVENDER, MID, MINT, SKY, WHITE } from "../../constants/colors";
+import { usePlanFeed } from "../../data/planFeed";
 import type { Plan } from "../../types";
 import { AvatarBubble } from "../common/AvatarBubble";
 
-export function PlanDetailSheet({ plan, onClose, onSuggest }: { plan: Plan; onClose: () => void; onSuggest: () => void }) {
-  const [joined, setJoined] = useState(false);
+// SUGGEST CHANGES CODE: `onSuggest` opened the edit sheet for a plan you host
+// and the suggestion sheet for anyone else's. Edit-only now, hence the rename.
+export function PlanDetailSheet({ plan: opened, onClose, onEdit }: { plan: Plan; onClose: () => void; onEdit: () => void }) {
+  const { isJoined, latest, pendingId, toggleJoin, joinError } = usePlanFeed();
+  // The sheet was handed a copy at tap time. Re-resolving keeps the roster and
+  // the Join button honest while it's open — a friend joining shows up here.
+  const plan = latest(opened);
+
+  const joined  = isJoined(plan);
+  const pending = pendingId === plan.id;
+  // The host is already on the roster, and letting them leave would strand
+  // everyone else on a plan with nobody running it.
+  const canJoin = plan.host !== "You";
 
   return (
     <div className="absolute inset-0 z-40 flex flex-col justify-end" style={{ background: "rgba(0,0,0,0.4)" }}>
@@ -55,22 +66,39 @@ export function PlanDetailSheet({ plan, onClose, onSuggest }: { plan: Plan; onCl
                 {plan.attendeeAvatars.map((a, i) => (
                   <div key={i} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full" style={{ background: a.color + "20" }}>
                     <AvatarBubble i={a.initials} color={a.color} size={20} />
-                    <span className="text-xs font-bold" style={{ color: DARK }}>{a.initials}</span>
+                    {/* A real plan knows who these people are; a seeded one only
+                        has initials, so fall back to the bubble's own letters. */}
+                    <span className="text-xs font-bold" style={{ color: DARK }}>
+                      {plan.roster?.[i]?.name || a.initials}
+                    </span>
                   </div>
                 ))}
               </div>
             </div>
+            {joinError && (
+              <p className="text-xs font-bold text-center mb-3" style={{ color: CORAL }}>{joinError}</p>
+            )}
             <div className="flex gap-2">
-              <button onClick={() => setJoined(!joined)}
+              <button onClick={() => void toggleJoin(plan)} disabled={!canJoin || pending}
                 className="flex-1 py-3.5 rounded-2xl font-extrabold text-base text-white transition-all"
-                style={{ background: joined ? MINT : `linear-gradient(135deg, ${MINT}, ${SKY})` }}>
-                {joined ? "✓ You're In!" : "Join Plan"}
+                style={{
+                  background: joined ? MINT : `linear-gradient(135deg, ${MINT}, ${SKY})`,
+                  opacity: canJoin && !pending ? 1 : 0.6,
+                }}>
+                {pending ? "…" : joined ? (canJoin ? "✓ You're In! · Tap to leave" : "✓ You're hosting") : "Join Plan"}
               </button>
-              <button onClick={onSuggest}
-                className="px-4 py-3.5 rounded-2xl font-extrabold text-sm flex items-center gap-1.5"
-                style={{ background: LAVENDER + "20", color: LAVENDER }}>
-                <Pencil size={14} /> {plan.host === "You" ? "Edit" : "Suggest"}
-              </button>
+              {/* SUGGEST CHANGES CODE: this button showed for everyone, reading
+                  "Edit" on your own plan and "Suggest" on someone else's. It's
+                  the host's alone now — restore by dropping the guard and
+                  putting the label back to:
+                    {plan.host === "You" ? "Edit" : "Suggest"} */}
+              {plan.host === "You" && (
+                <button onClick={onEdit}
+                  className="px-4 py-3.5 rounded-2xl font-extrabold text-sm flex items-center gap-1.5"
+                  style={{ background: LAVENDER + "20", color: LAVENDER }}>
+                  <Pencil size={14} /> Edit
+                </button>
+              )}
               <button className="w-12 h-12 rounded-2xl flex items-center justify-center self-center"
                 style={{ background: CARD }}>
                 <Share2 size={17} style={{ color: MID }} />

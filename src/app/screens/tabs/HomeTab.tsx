@@ -1,9 +1,9 @@
 import { Bell } from "lucide-react";
-import { useEffect, useState } from "react";
 import { MyPlanCard } from "../../components/plans/MyPlanCard";
 import { BG, CORAL, DARK, LAVENDER, LIGHT, MID, SKY, WHITE } from "../../constants/colors";
 import { useCurrentUser } from "../../data/currentUser";
-import { isToday, watchMyPlans } from "../../data/plans";
+import { usePlanFeed } from "../../data/planFeed";
+import { isToday } from "../../data/plans";
 import type { Plan } from "../../types";
 
 const greeting = () => {
@@ -13,31 +13,16 @@ const greeting = () => {
   return "Good evening";
 };
 
-export function HomeTab({ onPlanTap, onSuggest, onBell, unread }: {
+export function HomeTab({ onPlanTap, onEdit, onBell, unread }: {
   onPlanTap: (p: Plan) => void;
-  onSuggest: (p: Plan) => void;
+  /** SUGGEST CHANGES CODE: was `onSuggest`, and fired for joined plans too. */
+  onEdit: (p: Plan) => void;
   onBell: () => void;
   unread: number;
 }) {
-  const { firstName, initials, status } = useCurrentUser();
-  const [plans, setPlans]     = useState<Plan[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState("");
-
-  // Re-subscribes when the session changes, so signing in as someone else
-  // swaps the list rather than leaving the last person's plans on screen.
-  useEffect(() => {
-    if (status !== "signedIn") {
-      setPlans([]);
-      setLoading(status === "loading");
-      return;
-    }
-    setLoading(true);
-    return watchMyPlans(
-      (found) => { setPlans(found); setError(""); setLoading(false); },
-      ()      => { setError("Couldn't load your plans."); setLoading(false); },
-    );
-  }, [status]);
+  const { firstName, initials } = useCurrentUser();
+  // Plans you host and plans you've joined, from the feed the whole app shares.
+  const { myPlans: plans, loading, error } = usePlanFeed();
 
   const todayPlans = plans.filter((p) => isToday(p.startsAt));
   const laterPlans = plans.filter((p) => !isToday(p.startsAt));
@@ -91,7 +76,7 @@ export function HomeTab({ onPlanTap, onSuggest, onBell, unread }: {
                     style={{ background: SKY + "20", color: SKY }}>{todayPlans.length} plans</span>
                 </div>
                 {todayPlans.map((p) => (
-                  <MyPlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onSuggest={() => onSuggest(p)} />
+                  <MyPlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onEdit={() => onEdit(p)} />
                 ))}
               </>
             )}
@@ -109,7 +94,7 @@ export function HomeTab({ onPlanTap, onSuggest, onBell, unread }: {
                     style={{ background: LAVENDER + "20", color: LAVENDER }}>{laterPlans.length} plans</span>
                 </div>
                 {laterPlans.map((p) => (
-                  <MyPlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onSuggest={() => onSuggest(p)} />
+                  <MyPlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onEdit={() => onEdit(p)} />
                 ))}
               </>
             )}
@@ -119,7 +104,7 @@ export function HomeTab({ onPlanTap, onSuggest, onBell, unread }: {
               <div className="flex flex-col items-center py-12 gap-3 text-center">
                 <span className="text-5xl">📅</span>
                 <p className="text-base font-extrabold" style={{ color: DARK }}>No plans yet</p>
-                <p className="text-sm" style={{ color: MID }}>Tap + to create one, or explore what's nearby.</p>
+                <p className="text-sm" style={{ color: MID }}>Tap + to create one, or join a friend's from Explore.</p>
               </div>
             )}
           </>

@@ -1,3 +1,17 @@
+// SUGGEST CHANGES CODE
+// ─────────────────────────────────────────────────────────────────────────
+// Shelved, not deleted. Nothing imports this file, so the bundler drops it —
+// it costs nothing to keep sitting here.
+//
+// It let you propose a different time or place on a plan someone else hosts,
+// and the note it collects was never wired to a send: the sheet shows its
+// confirmation screen locally and the suggestion goes nowhere yet.
+//
+// To bring it back, search the codebase for "SUGGEST CHANGES CODE" — every
+// call site that fed this sheet is marked, with the removed markup quoted
+// where it isn't obvious.
+// ─────────────────────────────────────────────────────────────────────────
+
 import { Check, Clock, MapPin, X } from "lucide-react";
 import { useState } from "react";
 import { CARD, DARK, LAVENDER, LIGHT, MID, MINT, SKY, WHITE } from "../../constants/colors";

@@ -2,20 +2,24 @@ import { ArrowLeft, Check, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { AvatarBubble } from "../components/common/AvatarBubble";
 import { BG, CARD, CORAL, DARK, LIGHT, MID, MINT, SKY } from "../constants/colors";
+import { useCurrentUser } from "../data/currentUser";
 import { avatarColorFor, initialsFor, useMyFriends } from "../data/friends";
-import { addFriends, searchUsersByUsername } from "../data/users";
+import { cancelFriendRequest, sendFriendRequest, useFriendRequests } from "../data/friendRequests";
+import { searchUsersByUsername } from "../data/users";
 import type { DirectoryUser } from "../types";
 
 /** Long enough that typing a handle doesn't fire a read per keystroke. */
 const SEARCH_DEBOUNCE_MS = 300;
 
 /**
- * Real handle search over the `users` collection. Adding writes straight to
- * your friend list rather than staging a batch — the Friends tab is watching
- * that collection, so someone you add is on it before you've navigated back.
+ * Real handle search over the `users` collection. Adding someone sends them a
+ * request rather than writing them onto your friend list: the friendship only
+ * exists once they accept, and it lands on both lists when they do.
  */
 export function InvitePage({ onBack }: { onBack: () => void }) {
   const { friends } = useMyFriends();
+  const { name, handle } = useCurrentUser();
+  const { requestedUids } = useFriendRequests();
 
   const [query, setQuery]         = useState("");
   const [results, setResults]     = useState<DirectoryUser[]>([]);
@@ -46,14 +50,20 @@ export function InvitePage({ onBack }: { onBack: () => void }) {
     return () => clearTimeout(t);
   }, [term]);
 
-  const add = async (user: DirectoryUser) => {
+  /** Asks, or takes the ask back if it hasn't been answered yet. */
+  const toggleRequest = async (user: DirectoryUser) => {
     if (adding.includes(user.uid)) return;
+    const asked = requestedUids.includes(user.uid);
+
     setAdding((prev) => [...prev, user.uid]);
     setAddError("");
     try {
-      await addFriends([user]);
+      if (asked) await cancelFriendRequest(user.uid);
+      else       await sendFriendRequest(user, name, handle);
+      // Nothing to set locally: the outgoing-requests subscription is what
+      // flips this row between "+ Add" and "Requested".
     } catch {
-      setAddError("Couldn't add that person. Try again.");
+      setAddError(asked ? "Couldn't cancel that request. Try again." : "Couldn't send that request. Try again.");
     } finally {
       setAdding((prev) => prev.filter((u) => u !== user.uid));
     }
@@ -70,7 +80,7 @@ export function InvitePage({ onBack }: { onBack: () => void }) {
         </button>
         <div>
           <h2 className="text-lg font-extrabold" style={{ color: DARK }}>Find Friends</h2>
-          <p className="text-xs" style={{ color: MID }}>Search by @username to add people</p>
+          <p className="text-xs" style={{ color: MID }}>Search by @username to send a request</p>
         </div>
       </div>
 
@@ -144,6 +154,7 @@ export function InvitePage({ onBack }: { onBack: () => void }) {
         ) : (
           results.map((u) => {
             const isFriend = friends.some((f) => f.uid === u.uid);
+            const asked    = requestedUids.includes(u.uid);
             const busy     = adding.includes(u.uid);
             return (
               <div key={u.uid} className="flex items-center gap-3 py-3"
@@ -165,10 +176,15 @@ export function InvitePage({ onBack }: { onBack: () => void }) {
                     <Check size={12} /> Added
                   </div>
                 ) : (
-                  <button onClick={() => add(u)} disabled={busy}
+                  /* Once asked, the same button takes the request back — there's
+                     nothing else useful to offer while you're waiting. */
+                  <button onClick={() => void toggleRequest(u)} disabled={busy}
                     className="px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all flex-shrink-0"
-                    style={{ background: busy ? CARD : SKY + "18", color: busy ? MID : SKY }}>
-                    {busy ? "Adding…" : "+ Add"}
+                    style={{
+                      background: busy ? CARD : asked ? CARD : SKY + "18",
+                      color:      busy ? MID  : asked ? MID  : SKY,
+                    }}>
+                    {busy ? "…" : asked ? "Requested" : "+ Add"}
                   </button>
                 )}
               </div>

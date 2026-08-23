@@ -21,7 +21,6 @@ import {
   serverTimestamp,
   setDoc,
   startAt,
-  writeBatch,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import type { DirectoryUser, StoredProfile } from "../types";
@@ -196,26 +195,8 @@ function excludeSelf(users: DirectoryUser[]): DirectoryUser[] {
   return users.filter((u) => u.uid && u.username && u.uid !== me);
 }
 
-/**
- * Writes the picked people to `users/{uid}/friends/{friendUid}`. One batch, so
- * a half-finished onboarding doesn't leave a partial friend list behind.
- */
-export async function addFriends(friends: DirectoryUser[]): Promise<void> {
-  const user = auth.currentUser;
-  if (!user) throw new Error("not-signed-in");
-  if (!friends.length) return;
-
-  const batch = writeBatch(db);
-  for (const friend of friends) {
-    batch.set(doc(db, "users", user.uid, "friends", friend.uid), {
-      uid:       friend.uid,
-      username:  friend.username,
-      name:      friend.name,
-      addedAt:   serverTimestamp(),
-    });
-  }
-  await batch.commit();
-}
+// Friending itself lives in `friendRequests.tsx`: adding someone is a request
+// they have to accept, and accepting writes both sides of the pair at once.
 
 // ── Errors ─────────────────────────────────────────────────────────────────
 

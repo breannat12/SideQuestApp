@@ -5,8 +5,9 @@ import { Toggle } from "../../components/common/Toggle";
 import { BG, CARD, CORAL, DARK, LAVENDER, LIGHT, MID, MINT, SKY, WHITE } from "../../constants/colors";
 import { DEFAULT_PLAN_EMOJI, PLAN_EMOJIS } from "../../data/activities";
 import { useCurrentUser } from "../../data/currentUser";
+import { useMyFriends } from "../../data/friends";
 import { useMyGroups } from "../../data/groups";
-import { MIN_QUERY, PLACES_ENABLED, suggestPlaces } from "../../data/places";
+import { getMyCoords, MIN_QUERY, PLACES_ENABLED, suggestPlaces } from "../../data/places";
 import { clockLabel, createPlan, planErrorMessage, startsAtFor, startsAtForClock } from "../../data/plans";
 import type { ClockTime } from "../../data/plans";
 import type { Place } from "../../types";
@@ -33,6 +34,7 @@ const TITLE_MAX = 40;
 export function CreateTab({ onCreated }: { onCreated: () => void }) {
   const { name: hostName }      = useCurrentUser();
   const { groups: myGroups }    = useMyGroups();
+  const { friends }             = useMyFriends();
   const [step, setStep]         = useState(0);
   const [title, setTitle]       = useState("");
   const [badge, setBadge]       = useState(DEFAULT_PLAN_EMOJI);
@@ -86,6 +88,17 @@ export function CreateTab({ onCreated }: { onCreated: () => void }) {
     setSharing(true);
     setShareError("");
     try {
+      // Coordinates are what let friends sort by distance later. A picked place
+      // brings its own; "Current Location" means here, so ask where that is.
+      // Either can come back empty — a plan without them simply carries no
+      // distance, which is better than blocking the share on a location fix.
+      const coords =
+        locMode === "current"
+          ? await getMyCoords().catch(() => null)
+          : place
+            ? { lat: place.lat, lng: place.lng }
+            : null;
+
       await createPlan({
         title:    planTitle,
         emoji:    badge.emoji,
@@ -96,7 +109,9 @@ export function CreateTab({ onCreated }: { onCreated: () => void }) {
         group,
         flexTime,
         flexLoc,
-      }, hostName);
+        lat: coords?.lat,
+        lng: coords?.lng,
+      }, hostName, audienceUids);
       setDone(true);
     } catch (err) {
       setShareError(planErrorMessage(err));
@@ -152,6 +167,16 @@ export function CreateTab({ onCreated }: { onCreated: () => void }) {
   /** Everyone, plus whatever groups you've actually made. */
   const groupChoices = ["Everyone", ...myGroups.map((g) => g.name)];
 
+  /**
+   * Who the plan goes out to: every friend, or just one group's members. This
+   * is what decides whose Explore tab it lands on, so picking a group here is a
+   * real audience choice rather than a label.
+   */
+  const audienceUids =
+    group === "Everyone"
+      ? friends.map((f) => f.uid)
+      : myGroups.find((g) => g.name === group)?.memberUids ?? [];
+
   if (done) {
     return (
       <div className="flex flex-col items-center justify-center h-full px-8 text-center" style={{ background: BG }}>
@@ -160,9 +185,22 @@ export function CreateTab({ onCreated }: { onCreated: () => void }) {
           {badge.emoji}
         </div>
         <h2 className="text-2xl font-extrabold mb-2" style={{ color: DARK }}>Plan Shared! 🚀</h2>
+        {/* Says who it actually reached. A plan with no audience is only ever
+            on your own Home tab, and that shouldn't read as "shared". */}
         <p className="text-sm leading-relaxed mb-8" style={{ color: MID }}>
-          Your <strong>{planTitle}</strong> was sent to <strong>{group}</strong>.
-          We'll notify you when friends join!
+          {audienceUids.length === 0 ? (
+            <>
+              Your <strong>{planTitle}</strong> is on your Home tab. Add friends
+              to <strong>{group}</strong> and your next plan reaches them too.
+            </>
+          ) : (
+            <>
+              Your <strong>{planTitle}</strong> went out to{" "}
+              <strong>{audienceUids.length} {audienceUids.length === 1 ? "friend" : "friends"}</strong>
+              {group === "Everyone" ? "" : <> in <strong>{group}</strong></>}.
+              We'll notify you when they join!
+            </>
+          )}
         </p>
         <div className="flex flex-col gap-3 w-full">
           <button onClick={() => { resetForm(); onCreated(); }}

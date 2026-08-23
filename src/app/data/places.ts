@@ -90,6 +90,47 @@ function getProximity(): Promise<[number, number] | null> {
   return proximity;
 }
 
+// ── Where you are, and how far that is ─────────────────────────────────────
+
+export interface Coords { lat: number; lng: number }
+
+/**
+ * Your own position, for measuring distances and for stamping a plan you're
+ * creating "here". Shares one resolution with the search bias above, so asking
+ * costs nothing extra.
+ *
+ * Precision depends on what's available: exact if geolocation is permitted,
+ * city-level if it fell back to the IP lookup, and null if neither worked. A
+ * city-level fix still orders plans sensibly relative to each other.
+ */
+export async function getMyCoords(): Promise<Coords | null> {
+  const near = await getProximity();
+  return near ? { lat: near[1], lng: near[0] } : null;
+}
+
+const EARTH_RADIUS_MILES = 3958.8;
+const toRadians = (deg: number) => (deg * Math.PI) / 180;
+
+/** Great-circle distance in miles. Plenty accurate at the scale of a city. */
+export function distanceMiles(from: Coords, to: Coords): number {
+  const dLat = toRadians(to.lat - from.lat);
+  const dLng = toRadians(to.lng - from.lng);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(from.lat)) * Math.cos(toRadians(to.lat)) * Math.sin(dLng / 2) ** 2;
+  return EARTH_RADIUS_MILES * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * "0.3 mi" — the chip on a plan card. Kept coarse on purpose: the underlying
+ * fix can be city-level, and "0.28 mi" would claim a precision that isn't there.
+ */
+export function formatDistance(miles: number): string {
+  if (miles < 0.1) return "< 0.1 mi";
+  if (miles < 10)  return `${miles.toFixed(1)} mi`;
+  return `${Math.round(miles)} mi`;
+}
+
 // ── Search ─────────────────────────────────────────────────────────────────
 
 /**

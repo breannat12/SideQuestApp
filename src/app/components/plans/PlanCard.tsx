@@ -1,13 +1,25 @@
-import { MapPin, Pencil } from "lucide-react";
+// SUGGEST CHANGES CODE: `Pencil` iconed the "Suggest" button in the action row.
+import { MapPin } from "lucide-react";
 import { useState } from "react";
-import { CARD, DARK, LAVENDER, LIGHT, MID, MINT, PEACH, WHITE } from "../../constants/colors";
+// SUGGEST CHANGES CODE: `LAVENDER` tinted the "Suggest" button.
+import { CARD, DARK, LIGHT, MID, MINT, PEACH, WHITE } from "../../constants/colors";
 import type { Plan } from "../../types";
 import { AvatarBubble } from "../common/AvatarBubble";
 
 export function PlanCard({
-  plan, onTap, compact = false, onSuggest,
-}: { plan: Plan; onTap?: () => void; compact?: boolean; onSuggest?: () => void }) {
-  const [joined,    setJoined]    = useState(false);
+  plan, onTap, compact = false, onJoin, joined = false, pending = false,
+}: {
+  plan: Plan;
+  onTap?: () => void;
+  compact?: boolean;
+  // SUGGEST CHANGES CODE: also took `onSuggest?: () => void`, for the button
+  // in the non-compact action row below.
+  /** Given only for real plans — seeded ones have no document to RSVP against. */
+  onJoin?: () => void;
+  joined?: boolean;
+  /** The RSVP write is in flight; the button holds still rather than flickering. */
+  pending?: boolean;
+}) {
   const [dismissed, setDismissed] = useState(false);
 
   if (dismissed) return null;
@@ -18,6 +30,8 @@ export function PlanCard({
     if (c === "#A5D8FF") return "#0070B0";
     return c;
   };
+
+  const joinLabel = pending ? "…" : joined ? "✓ Joined!" : "Join";
 
   return (
     <div className="rounded-3xl mb-3 overflow-hidden"
@@ -41,10 +55,16 @@ export function PlanCard({
               </span>
             </div>
             <div className="flex items-center gap-3 mt-2">
-              <span className="flex items-center gap-1 text-xs" style={{ color: MID }}>
-                <MapPin size={10} /> {plan.distance}
-              </span>
-              <span className="text-xs" style={{ color: LIGHT }}>·</span>
+              {/* Real plans have no distance behind them yet, so the pin and the
+                  separator come along only when there's a figure to show. */}
+              {plan.distance && (
+                <>
+                  <span className="flex items-center gap-1 text-xs" style={{ color: MID }}>
+                    <MapPin size={10} /> {plan.distance}
+                  </span>
+                  <span className="text-xs" style={{ color: LIGHT }}>·</span>
+                </>
+              )}
               <span className="text-xs truncate" style={{ color: MID }}>{plan.location}</span>
             </div>
             <div className="flex items-center gap-2 mt-2">
@@ -60,28 +80,41 @@ export function PlanCard({
                 )}
               </div>
               <span className="text-xs" style={{ color: MID }}>{plan.attendees} going</span>
+
+              {/* Compact cards keep the RSVP inline: Explore is a scanning list,
+                  and a full button row per card would halve how many fit. */}
+              {compact && onJoin && (
+                <button onClick={(e) => { e.stopPropagation(); onJoin(); }} disabled={pending}
+                  className="ml-auto px-3.5 py-1.5 rounded-full text-xs font-extrabold transition-all flex-shrink-0"
+                  style={{ background: joined ? MINT : MINT + "20", color: joined ? WHITE : MINT, opacity: pending ? 0.6 : 1 }}>
+                  {joinLabel}
+                </button>
+              )}
             </div>
           </div>
         </div>
 
         {!compact && (
           <div className="flex gap-2 mt-3">
-            <button onClick={(e) => { e.stopPropagation(); setJoined(!joined); }}
+            <button onClick={(e) => { e.stopPropagation(); onJoin?.(); }} disabled={pending || !onJoin}
               className="flex-1 py-2.5 rounded-2xl text-sm font-extrabold transition-all"
-              style={{ background: joined ? MINT : MINT + "20", color: joined ? WHITE : MINT }}>
-              {joined ? "✓ Joined!" : "Join"}
+              style={{ background: joined ? MINT : MINT + "20", color: joined ? WHITE : MINT, opacity: pending ? 0.6 : 1 }}>
+              {joinLabel}
             </button>
             <button onClick={(e) => { e.stopPropagation(); setDismissed(true); }}
               className="px-3 py-2.5 rounded-2xl text-xs font-bold"
               style={{ background: CARD, color: MID }}>
               Next Time
             </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); onSuggest?.(); }}
-              className="px-3 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-1"
-              style={{ background: LAVENDER + "18", color: LAVENDER }}>
-              <Pencil size={11} /> Suggest
-            </button>
+            {/* SUGGEST CHANGES CODE: a third button sat here:
+
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onSuggest?.(); }}
+                    className="px-3 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-1"
+                    style={{ background: LAVENDER + "18", color: LAVENDER }}>
+                    <Pencil size={11} /> Suggest
+                  </button>
+            */}
           </div>
         )}
       </div>

@@ -1,6 +1,9 @@
 import {
   addDoc,
+  arrayRemove,
+  arrayUnion,
   collection,
+  deleteField,
   doc,
   onSnapshot,
   type FieldValue,
@@ -10,10 +13,11 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { CORAL, LAVENDER, MINT, PEACH, SKY } from "../constants/colors";
-import type { NewPlan, Plan } from "../types";
+import { LAVENDER, MINT, PEACH, SKY } from "../constants/colors";
+import type { Attendee, NewPlan, Plan } from "../types";
 import { ME } from "./currentUser";
 import { auth, db } from "./firebase";
+import { avatarColorFor, initialsFor } from "./friends";
 
 // ── Saved plans ────────────────────────────────────────────────────────────
 
@@ -77,27 +81,84 @@ function formatWhen(startsAt: Date): string {
 }
 
 /**
- * Saves a plan you created. Only your own plans are read back for now, so the
- * host fields are written for the benefit of a later "friends' plans" feed
- * rather than anything the Home tab reads today.
+ * Saves a plan you created and addresses it to `audienceUids` — the friends who
+ * will see it on Explore, get a notification for it, and be allowed to join.
+ *
+ * The audience is stamped on at creation rather than resolved at read time:
+ * Firestore can't join a plan against someone else's private friend list, and
+ * freezing it means a friend added tomorrow doesn't retroactively appear on a
+ * plan that already happened.
+ *
+ * You go straight onto the roster as its first attendee, so hosting and joining
+ * read back through one query on Home.
  */
-export async function createPlan(plan: NewPlan, hostName: string): Promise<void> {
+export async function createPlan(
+  plan: NewPlan,
+  hostName: string,
+  audienceUids: string[],
+): Promise<void> {
   const user = auth.currentUser;
   if (!user) throw new Error("not-signed-in");
 
+  const name = hostName || user.displayName || "";
+  // Your own uid would let you match your own audience query and see the plan
+  // twice — once as host, once as a friend's.
+  const audience = [...new Set(audienceUids.filter((uid) => uid && uid !== user.uid))];
+
   await addDoc(collection(db, "plans"), {
     hostUid:   user.uid,
-    hostName:  hostName || user.displayName || "",
+    hostName:  name,
     title:     plan.title,
     emoji:     plan.emoji,
     color:     plan.color,
     timeLabel: plan.timeLabel,
     startsAt:  Timestamp.fromDate(plan.startsAt),
     location:  plan.location,
+    // Firestore rejects an undefined value outright, so coordinates are spread
+    // in only when the location actually came with them.
+    ...(typeof plan.lat === "number" && typeof plan.lng === "number"
+      ? { lat: plan.lat, lng: plan.lng }
+      : {}),
     group:     plan.group,
     flexTime:  plan.flexTime,
     flexLoc:   plan.flexLoc,
+    audienceUids:  audience,
+    attendeeUids:  [user.uid],
+    attendeeNames: { [user.uid]: name },
+    // A client clock, not `serverTimestamp()`: the sentinel isn't allowed inside
+    // a map value, and this only ever drives a "4m ago" label.
+    joinedAt:      { [user.uid]: Timestamp.now() },
     createdAt: serverTimestamp(),
+  });
+}
+
+// ── Joining ────────────────────────────────────────────────────────────────
+
+/**
+ * Adds you to a plan someone else is hosting. Writes all three attendee fields
+ * together — the security rules only accept a change that touches exactly these
+ * and moves your own uid in or out, so a join can't edit anything else.
+ */
+export async function joinPlan(planId: string, myName: string): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) throw new Error("not-signed-in");
+
+  await updateDoc(doc(db, "plans", planId), {
+    attendeeUids: arrayUnion(user.uid),
+    [`attendeeNames.${user.uid}`]: myName || user.displayName || "",
+    [`joinedAt.${user.uid}`]:      Timestamp.now(),
+  });
+}
+
+/** Backs you out again. The host can't leave their own plan — see the rules. */
+export async function leavePlan(planId: string): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) throw new Error("not-signed-in");
+
+  await updateDoc(doc(db, "plans", planId), {
+    attendeeUids: arrayRemove(user.uid),
+    [`attendeeNames.${user.uid}`]: deleteField(),
+    [`joinedAt.${user.uid}`]:      deleteField(),
   });
 }
 
@@ -125,7 +186,26 @@ export async function updatePlan(id: string, edit: PlanEdit): Promise<void> {
 }
 
 /**
- * Live view of the plans you host, soonest first.
+ * How long a plan stays in a friend's Explore feed after its start time. Long
+ * enough that "Coffee at 3" is still joinable at 3:20, short enough that
+ * yesterday's plans don't pile up in a feed nobody can act on.
+ */
+const FEED_GRACE_MS = 3 * 60 * 60 * 1000;
+
+const bySoonest = (a: Plan, b: Plan) =>
+  (a.startsAt?.getTime() ?? 0) - (b.startsAt?.getTime() ?? 0);
+
+/** The shape of the snapshots the watchers below feed to `fill`. */
+type PlanSnapshot = { docs: { id: string; data: () => Record<string, unknown> }[] };
+
+/**
+ * Live view of the plans on your Home tab, soonest first: the ones you host and
+ * the ones you've joined.
+ *
+ * Two subscriptions rather than one query on `attendeeUids`, because plans
+ * written before the roster existed have no such field and would drop off Home
+ * the day this shipped. Each snapshot owns its own map, so a document leaving
+ * one query can't delete a copy the other still holds.
  *
  * Sorted here rather than in the query on purpose: pairing `where` with an
  * `orderBy` on a different field needs a composite index, and a plan list this
@@ -140,39 +220,143 @@ export function watchMyPlans(
     onPlans([]);
     return () => {};
   }
+  const uid = user.uid;
+
+  const hosted = new Map<string, Plan>();
+  const joined = new Map<string, Plan>();
+  let hostedReady = false;
+  let joinedReady = false;
+
+  // Held until both have reported once, so Home doesn't paint your hosted plans
+  // and then visibly grow a moment later as the joined ones land.
+  const emit = () => {
+    if (!hostedReady || !joinedReady) return;
+    const merged = new Map([...hosted, ...joined]);
+    onPlans([...merged.values()].sort(bySoonest));
+  };
+
+  const fill = (map: Map<string, Plan>, snap: PlanSnapshot) => {
+    map.clear();
+    for (const d of snap.docs) map.set(d.id, toPlan(d.id, d.data(), uid));
+  };
+
+  const unsubHosted = onSnapshot(
+    query(collection(db, "plans"), where("hostUid", "==", uid)),
+    (snap) => { fill(hosted, snap); hostedReady = true; emit(); },
+    onError,
+  );
+
+  const unsubJoined = onSnapshot(
+    query(collection(db, "plans"), where("attendeeUids", "array-contains", uid)),
+    (snap) => { fill(joined, snap); joinedReady = true; emit(); },
+    onError,
+  );
+
+  return () => { unsubHosted(); unsubJoined(); };
+}
+
+/**
+ * Live view of the plans your friends addressed to you — what Explore offers to
+ * join, and what the notification drawer is built from.
+ *
+ * Plans well past their start time are dropped: this feed is for things you can
+ * still turn up to.
+ */
+export function watchFriendPlans(
+  onPlans: (plans: Plan[]) => void,
+  onError: (err: unknown) => void,
+): () => void {
+  const user = auth.currentUser;
+  if (!user) {
+    onPlans([]);
+    return () => {};
+  }
+  const uid = user.uid;
 
   return onSnapshot(
-    query(collection(db, "plans"), where("hostUid", "==", user.uid)),
+    query(collection(db, "plans"), where("audienceUids", "array-contains", uid)),
     (snap) => {
-      const plans = snap.docs.map((d) => toPlan(d.id, d.data()));
-      plans.sort((a, b) => (a.startsAt?.getTime() ?? 0) - (b.startsAt?.getTime() ?? 0));
+      const plans = snap.docs
+        .map((d) => toPlan(d.id, d.data(), uid))
+        .filter((p) => p.hostUid !== uid)
+        .filter((p) => (p.startsAt?.getTime() ?? 0) > Date.now() - FEED_GRACE_MS);
+      plans.sort(bySoonest);
       onPlans(plans);
     },
     onError,
   );
 }
 
-function toPlan(id: string, data: Record<string, unknown>): Plan {
+const asMap = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+/** Everyone on a plan, host first, from the three parallel attendee fields. */
+function toRoster(data: Record<string, unknown>, hostUid: string): Attendee[] {
+  const uids = Array.isArray(data.attendeeUids)
+    ? data.attendeeUids.map(String)
+    // A plan saved before the roster existed still has exactly one person on it.
+    : hostUid ? [hostUid] : [];
+
+  const names    = asMap(data.attendeeNames);
+  const times    = asMap(data.joinedAt);
+  const hostName = String(data.hostName ?? "");
+
+  return uids
+    .map((uid) => {
+      const at = times[uid];
+      return {
+        uid,
+        name:     String(names[uid] ?? (uid === hostUid ? hostName : "")),
+        joinedAt: at instanceof Timestamp ? at.toDate() : undefined,
+      };
+    })
+    .sort((a, b) => {
+      if (a.uid === hostUid) return -1;   // the host always leads the row
+      if (b.uid === hostUid) return 1;
+      return (a.joinedAt?.getTime() ?? 0) - (b.joinedAt?.getTime() ?? 0);
+    });
+}
+
+function toPlan(id: string, data: Record<string, unknown>, myUid: string): Plan {
   const color    = String(data.color ?? SKY);
   const startsAt = data.startsAt instanceof Timestamp ? data.startsAt.toDate() : new Date();
+  const hostUid  = String(data.hostUid ?? "");
+  const hostName = String(data.hostName ?? "");
+  const mine     = hostUid === myUid;
+  const roster   = toRoster(data, hostUid);
 
   return {
     id,
     emoji:       String(data.emoji ?? "👥"),
     activity:    String(data.title ?? "Untitled plan"),
-    host:        "You",           // the query only returns plans you host
-    avatar:      ME,
-    avatarColor: color,
+    host:        mine ? "You" : hostName || "Someone",
+    // `ME` is swapped for your own initials at render time, which lets a seeded
+    // plan and a real one share one avatar component.
+    avatar:      mine ? ME : initialsFor(hostName),
+    avatarColor: mine ? color : avatarColorFor(hostUid),
     accentColor: color,
     time:        formatWhen(startsAt),
     startsAt,
     location:    String(data.location ?? ""),
     group:       String(data.group ?? "Everyone"),
     description: "",
-    attendees:   1,
-    attendeeAvatars: [{ initials: ME, color }],
+    attendees:   roster.length,
+    attendeeAvatars: roster.map((a) => ({
+      initials: a.uid === myUid ? ME : initialsFor(a.name),
+      color:    a.uid === myUid ? color : avatarColorFor(a.uid),
+    })),
     flexTime:    Boolean(data.flexTime),
     flexLoc:     Boolean(data.flexLoc),
+    // Distance is left to the caller: it needs the viewer's own position, which
+    // this module has no business resolving on every snapshot.
+    lat:         typeof data.lat === "number" ? data.lat : undefined,
+    lng:         typeof data.lng === "number" ? data.lng : undefined,
+    hostUid,
+    createdAt:   data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
+    audienceUids: Array.isArray(data.audienceUids) ? data.audienceUids.map(String) : [],
+    roster,
   };
 }
 
@@ -196,52 +380,9 @@ export function planErrorMessage(err: unknown): string {
 }
 
 // ── Seeded demo data ───────────────────────────────────────────────────────
-
-// ── Plans visible in Explore ───────────────────────────────────────────────
-export const PLANS: Plan[] = [
-  {
-    id: "1", emoji: "☕", activity: "Coffee Run", host: "Mia K.", avatar: "MK", avatarColor: PEACH,
-    time: "Now", distance: "0.3 mi", attendees: 3, accentColor: PEACH,
-    location: "Blue Bottle, Hayes Valley", group: "College",
-    description: "Quick coffee before afternoon classes. Anyone's welcome to join!",
-    attendeeAvatars: [{ initials: "MK", color: PEACH }, { initials: "LT", color: SKY }, { initials: "YO", color: MINT }],
-  },
-  {
-    id: "2", emoji: "🍕", activity: "Lunch Break", host: "Raj S.", avatar: "RS", avatarColor: CORAL,
-    time: "12:30 PM", distance: "0.6 mi", attendees: 3, accentColor: CORAL,
-    location: "Tony's Pizza, Union Sq", group: "Roommates",
-    description: "Grabbing a slice. The more the merrier — let's make it a squad lunch.",
-    attendeeAvatars: [{ initials: "RS", color: CORAL }, { initials: "CM", color: PEACH }],
-  },
-  {
-    id: "3", emoji: "📚", activity: "Study Session", host: "Lily T.", avatar: "LT", avatarColor: SKY,
-    time: "2:00 PM", distance: "1.1 mi", attendees: 2, accentColor: SKY,
-    location: "Main Library, 4th floor", group: "College",
-    description: "Finals prep — bringing snacks. Quiet study vibes only please.",
-    attendeeAvatars: [{ initials: "LT", color: SKY }, { initials: "SP", color: LAVENDER }],
-  },
-  {
-    id: "4", emoji: "🏋️", activity: "Gym Sesh", host: "Cole M.", avatar: "CM", avatarColor: MINT,
-    time: "5:00 PM", distance: "0.8 mi", attendees: 2, accentColor: MINT,
-    location: "Planet Fitness, Market St", group: "Roommates",
-    description: "Leg day. Looking for a spotter and maybe some post-gym smoothies.",
-    attendeeAvatars: [{ initials: "CM", color: MINT }],
-  },
-  {
-    id: "5", emoji: "🎮", activity: "Gaming Night", host: "Zoe L.", avatar: "ZL", avatarColor: LAVENDER,
-    time: "8:00 PM", distance: "1.4 mi", attendees: 5, accentColor: LAVENDER,
-    location: "Zoe's Apartment, Mission", group: "College",
-    description: "Mario Kart tournament. Bring your controllers & snacks. Losers do dishes.",
-    attendeeAvatars: [{ initials: "ZL", color: LAVENDER }, { initials: "MK", color: PEACH }, { initials: "RS", color: CORAL }, { initials: "LT", color: SKY }],
-  },
-  {
-    id: "6", emoji: "🎬", activity: "Movie Night", host: "Sam P.", avatar: "SP", avatarColor: "#A5D8FF",
-    time: "7:00 PM", distance: "1.0 mi", attendees: 4, accentColor: "#A5D8FF",
-    location: "AMC Metreon 16", group: "Friends",
-    description: "Seeing the new Villeneuve film. Pre-buying tickets — confirm ASAP!",
-    attendeeAvatars: [{ initials: "SP", color: "#A5D8FF" }, { initials: "YO", color: MINT }, { initials: "CM", color: PEACH }],
-  },
-];
+// Explore reads real plans from Firestore now, so there's no seeded feed left.
+// What's below is unused, and stays only for the shelved Home variant in
+// HomeTab.withCoincidenceAlerts.tsx, which still refers to it in comments.
 
 // ── My Plans (created or RSVP'd by you) ──────────────────────────────────
 export const MY_PLANS_TODAY: Plan[] = [

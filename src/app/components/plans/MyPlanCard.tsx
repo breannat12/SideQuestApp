@@ -1,10 +1,14 @@
-import { MapPin, Pencil } from "lucide-react";
+// SUGGEST CHANGES CODE: `Pencil` iconed the "Suggest Change" button.
+import { MapPin } from "lucide-react";
 import { useState } from "react";
 import { CARD, CORAL, DARK, LAVENDER, LIGHT, MID, PEACH, SKY, WHITE } from "../../constants/colors";
 import type { Plan } from "../../types";
 import { AvatarBubble } from "../common/AvatarBubble";
 
-export function MyPlanCard({ plan, onTap, onSuggest }: { plan: Plan; onTap: () => void; onSuggest: () => void }) {
+// SUGGEST CHANGES CODE: `onSuggest` did double duty here — "Edit Plan" when you
+// host, "Suggest Change" when you'd only joined. It's edit-only now, hence the
+// rename.
+export function MyPlanCard({ plan, onTap, onEdit }: { plan: Plan; onTap: () => void; onEdit: () => void }) {
   const isHost = plan.host === "You";
   const [cancelled, setCancelled] = useState(false);
   const [left, setLeft]           = useState(false);
@@ -95,9 +99,7 @@ export function MyPlanCard({ plan, onTap, onSuggest }: { plan: Plan; onTap: () =
         <div className="flex gap-2 mt-3">
           {isHost ? (
             <>
-              {/* Editing your own plan is the same screen as suggesting a
-                  change to someone else's, so one button covers both. */}
-              <button onClick={(e) => { e.stopPropagation(); onSuggest(); }}
+              <button onClick={(e) => { e.stopPropagation(); onEdit(); }}
                 className="flex-1 py-2.5 rounded-2xl text-xs font-extrabold"
                 style={{ background: SKY + "18", color: SKY }}>
                 ✏️ Edit Plan
@@ -109,18 +111,20 @@ export function MyPlanCard({ plan, onTap, onSuggest }: { plan: Plan; onTap: () =
               </button>
             </>
           ) : (
-            <>
-              <button onClick={(e) => { e.stopPropagation(); onSuggest(); }}
-                className="flex-1 py-2.5 rounded-2xl text-xs font-extrabold"
-                style={{ background: LAVENDER + "18", color: LAVENDER }}>
-                <Pencil size={11} style={{ display: "inline", marginRight: 4 }} />Suggest Change
-              </button>
-              <button onClick={(e) => { e.stopPropagation(); setLeft(true); }}
-                className="px-3 py-2.5 rounded-2xl text-xs font-bold"
-                style={{ background: CARD, color: MID }}>
-                Leave
-              </button>
-            </>
+            /* SUGGEST CHANGES CODE: a plan you'd joined paired Leave with a
+               "Suggest Change" button. Leave takes the full row now:
+
+                 <button onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                   className="flex-1 py-2.5 rounded-2xl text-xs font-extrabold"
+                   style={{ background: LAVENDER + "18", color: LAVENDER }}>
+                   <Pencil size={11} style={{ display: "inline", marginRight: 4 }} />Suggest Change
+                 </button>
+            */
+            <button onClick={(e) => { e.stopPropagation(); setLeft(true); }}
+              className="flex-1 py-2.5 rounded-2xl text-xs font-bold"
+              style={{ background: CARD, color: MID }}>
+              Leave
+            </button>
           )}
         </div>
       </div>
