@@ -2,7 +2,8 @@
 import { MapPin } from "lucide-react";
 import { useState } from "react";
 // SUGGEST CHANGES CODE: `LAVENDER` tinted the "Suggest" button.
-import { CARD, DARK, LIGHT, MID, MINT, PEACH, WHITE } from "../../constants/colors";
+import { CARD, DARK, MID, MINT, PEACH, WHITE } from "../../constants/colors";
+import { locationLine } from "../../data/plans";
 import type { Plan } from "../../types";
 import { AvatarBubble } from "../common/AvatarBubble";
 
@@ -55,17 +56,12 @@ export function PlanCard({
               </span>
             </div>
             <div className="flex items-center gap-3 mt-2">
-              {/* Real plans have no distance behind them yet, so the pin and the
-                  separator come along only when there's a figure to show. */}
-              {plan.distance && (
-                <>
-                  <span className="flex items-center gap-1 text-xs" style={{ color: MID }}>
-                    <MapPin size={10} /> {plan.distance}
-                  </span>
-                  <span className="text-xs" style={{ color: LIGHT }}>·</span>
-                </>
-              )}
-              <span className="text-xs truncate" style={{ color: MID }}>{plan.location}</span>
+              {/* Place first, then how far it is — "Blue Bottle · 0.3 mi". The
+                  distance is appended by `locationLine`, which leaves it off
+                  where it wouldn't mean anything. */}
+              <span className="flex items-center gap-1 text-xs truncate" style={{ color: MID }}>
+                <MapPin size={10} className="flex-shrink-0" /> {locationLine(plan)}
+              </span>
             </div>
             <div className="flex items-center gap-2 mt-2">
               <div className="flex -space-x-2">

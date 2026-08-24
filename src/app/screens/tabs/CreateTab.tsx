@@ -8,7 +8,7 @@ import { useCurrentUser } from "../../data/currentUser";
 import { useMyFriends } from "../../data/friends";
 import { useMyGroups } from "../../data/groups";
 import { getMyCoords, MIN_QUERY, PLACES_ENABLED, suggestPlaces } from "../../data/places";
-import { clockLabel, createPlan, planErrorMessage, startsAtFor, startsAtForClock } from "../../data/plans";
+import { clockLabel, createPlan, CURRENT_LOCATION, planErrorMessage, startsAtFor, startsAtForClock } from "../../data/plans";
 import type { ClockTime } from "../../data/plans";
 import type { Place } from "../../types";
 
@@ -59,7 +59,7 @@ export function CreateTab({ onCreated }: { onCreated: () => void }) {
   const [placeError, setPlaceError]   = useState("");
 
   const locationLabel =
-    locMode === "current" ? "Current Location" : (place?.name ?? locQuery.trim()) || "Anywhere nearby";
+    locMode === "current" ? CURRENT_LOCATION : (place?.name ?? locQuery.trim()) || "Anywhere nearby";
 
   const timeLabel = clock ? clockLabel(clock) : time;
 

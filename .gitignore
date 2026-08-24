@@ -2,3 +2,6 @@
 .env
 .env.*
 !.env.example
+
+# Firebase CLI local cache
+.firebase/

@@ -33,6 +33,9 @@ export interface Plan {
   audienceUids?: string[];
   /** Everyone who's in, host first. `attendees` is just its length. */
   roster?: Attendee[];
+  /** Called off by its host. Kept rather than deleted — see `cancelPlan`. */
+  cancelled?: boolean;
+  cancelledAt?: Date;
 }
 
 /** One person on a plan's roster, as stored in the plan's attendee maps. */
@@ -60,7 +63,7 @@ export interface Notif {
   // COINCIDENCE FEATURE -- the "coincidence" notification kind. Restore it to
   // this union alongside the icon branch in NotifDrawer.
   // type: "coincidence" | "join" | "plan" | "ping" | "request";
-  type: "join" | "plan" | "ping" | "request";
+  type: "join" | "plan" | "ping" | "request" | "cancel";
   title: string; body: string; read: boolean;
   /** When it happened. The drawer shows this as "4m ago". */
   at: Date;

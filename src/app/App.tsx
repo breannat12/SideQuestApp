@@ -2,6 +2,7 @@ import { Bell, Compass, Home, Plus, User, Users } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NotifDrawer } from "./components/sheets/NotifDrawer";
 import { PlanDetailSheet } from "./components/sheets/PlanDetailSheet";
+import { CancelPlanDialog } from "./components/sheets/CancelPlanDialog";
 import { EditPlanSheet } from "./components/sheets/EditPlanSheet";
 // SUGGEST CHANGES CODE: the sheet for proposing a different time or place on a
 // plan someone else hosts. The file is still there, just unreferenced — restore
@@ -56,6 +57,9 @@ function AppShell() {
   // SUGGEST CHANGES CODE: was `suggestPlan`, and held anyone's plan. Now only
   // ever your own, since editing is the one thing left that opens a sheet.
   const [editPlan, setEditPlan]       = useState<Plan | null>(null);
+  // Held here rather than in the card: the dialog dims the whole app, and a
+  // card sits inside Home's scroll container where an overlay would be clipped.
+  const [cancelling, setCancelling]   = useState<Plan | null>(null);
   const { name: userName, status, hasProfile } = useCurrentUser();
   const { unread } = useNotifs();
 
@@ -163,6 +167,11 @@ function AppShell() {
             …and drop the host guard in `openEdit` above. */}
         {editPlan && <EditPlanSheet plan={editPlan} onClose={() => setEditPlan(null)} />}
 
+        {/* Last of the overlays, so it sits above anything else that's open. */}
+        {cancelling && (
+          <CancelPlanDialog plan={cancelling} onClose={() => setCancelling(null)} />
+        )}
+
         {/* Page content */}
         <div className="flex-1 overflow-hidden relative">
           {tab === "explore" && screen === "app" && (
@@ -177,7 +186,7 @@ function AppShell() {
             </button>
           )}
 
-          {tab === "home"    && <HomeTab    onPlanTap={setDetailPlan} onEdit={openEdit} onBell={() => setNotifOpen(true)} unread={unread} />}
+          {tab === "home"    && <HomeTab    onPlanTap={setDetailPlan} onEdit={openEdit} onCancel={setCancelling} onBell={() => setNotifOpen(true)} unread={unread} />}
           {/* SUGGEST CHANGES CODE: Explore lists other people's plans only, so
               it had `onSuggest={openSuggest}` here. Nothing to hand it now. */}
           {tab === "explore" && <ExploreTab onPlanTap={setDetailPlan} />}

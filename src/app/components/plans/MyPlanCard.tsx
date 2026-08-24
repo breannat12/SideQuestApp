@@ -1,19 +1,28 @@
 // SUGGEST CHANGES CODE: `Pencil` iconed the "Suggest Change" button.
 import { MapPin } from "lucide-react";
-import { useState } from "react";
-import { CARD, CORAL, DARK, LAVENDER, LIGHT, MID, PEACH, SKY, WHITE } from "../../constants/colors";
+import { CARD, DANGER, DARK, LAVENDER, MID, PEACH, SKY, WHITE } from "../../constants/colors";
+import { usePlanFeed } from "../../data/planFeed";
+import { locationLine } from "../../data/plans";
 import type { Plan } from "../../types";
 import { AvatarBubble } from "../common/AvatarBubble";
 
 // SUGGEST CHANGES CODE: `onSuggest` did double duty here — "Edit Plan" when you
 // host, "Suggest Change" when you'd only joined. It's edit-only now, hence the
 // rename.
-export function MyPlanCard({ plan, onTap, onEdit }: { plan: Plan; onTap: () => void; onEdit: () => void }) {
-  const isHost = plan.host === "You";
-  const [cancelled, setCancelled] = useState(false);
-  const [left, setLeft]           = useState(false);
+export function MyPlanCard({ plan, onTap, onEdit, onCancel }: {
+  plan: Plan;
+  onTap: () => void;
+  onEdit: () => void;
+  /** Opens the confirmation dialog. Cancelling itself happens there. */
+  onCancel: () => void;
+}) {
+  const { toggleJoin, pendingId } = usePlanFeed();
+  const isHost  = plan.host === "You";
+  const leaving = pendingId === plan.id;
 
-  if (cancelled || left) return null;
+  // Neither button hides the card by itself any more. Both write, and the card
+  // goes when the snapshot says it has — which is also what makes it disappear
+  // on your other devices, and on everyone else's.
 
   const tintText = (c: string) => {
     if (c === PEACH)     return "#A07000";
@@ -63,21 +72,10 @@ export function MyPlanCard({ plan, onTap, onEdit }: { plan: Plan; onTap: () => v
               </span>
             </div>
             <div className="flex items-center gap-3 mt-2">
-              {/* Plans you created carry no distance — there's no geo maths
-                  behind them yet, so the pin rides with the location instead. */}
-              {plan.distance ? (
-                <>
-                  <span className="flex items-center gap-1 text-xs" style={{ color: MID }}>
-                    <MapPin size={10} /> {plan.distance}
-                  </span>
-                  <span className="text-xs" style={{ color: LIGHT }}>·</span>
-                  <span className="text-xs truncate" style={{ color: MID }}>{plan.location}</span>
-                </>
-              ) : (
-                <span className="flex items-center gap-1 text-xs truncate" style={{ color: MID }}>
-                  <MapPin size={10} className="flex-shrink-0" /> {plan.location}
-                </span>
-              )}
+              {/* Place first, then how far it is — "Blue Bottle · 0.3 mi". */}
+              <span className="flex items-center gap-1 text-xs truncate" style={{ color: MID }}>
+                <MapPin size={10} className="flex-shrink-0" /> {locationLine(plan)}
+              </span>
             </div>
             <div className="flex items-center gap-2 mt-2">
               <div className="flex -space-x-2">
@@ -104,9 +102,9 @@ export function MyPlanCard({ plan, onTap, onEdit }: { plan: Plan; onTap: () => v
                 style={{ background: SKY + "18", color: SKY }}>
                 ✏️ Edit Plan
               </button>
-              <button onClick={(e) => { e.stopPropagation(); setCancelled(true); }}
-                className="px-3 py-2.5 rounded-2xl text-xs font-bold"
-                style={{ background: CORAL + "18", color: CORAL }}>
+              <button onClick={(e) => { e.stopPropagation(); onCancel(); }}
+                className="px-4 py-2.5 rounded-2xl text-xs font-extrabold"
+                style={{ background: DANGER, color: WHITE }}>
                 Cancel
               </button>
             </>
@@ -120,10 +118,10 @@ export function MyPlanCard({ plan, onTap, onEdit }: { plan: Plan; onTap: () => v
                    <Pencil size={11} style={{ display: "inline", marginRight: 4 }} />Suggest Change
                  </button>
             */
-            <button onClick={(e) => { e.stopPropagation(); setLeft(true); }}
-              className="flex-1 py-2.5 rounded-2xl text-xs font-bold"
-              style={{ background: CARD, color: MID }}>
-              Leave
+            <button onClick={(e) => { e.stopPropagation(); void toggleJoin(plan); }} disabled={leaving}
+              className="flex-1 py-2.5 rounded-2xl text-xs font-extrabold"
+              style={{ background: DANGER, color: WHITE, opacity: leaving ? 0.6 : 1 }}>
+              {leaving ? "Leaving…" : "Leave"}
             </button>
           )}
         </div>

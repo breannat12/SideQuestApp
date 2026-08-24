@@ -12,6 +12,11 @@ interface PlanFeedValue {
   myPlans: Plan[];
   /** Plans friends addressed to you — what Explore offers to join. */
   friendPlans: Plan[];
+  /**
+   * Friends' plans that were called off. Kept apart from `friendPlans` so they
+   * leave Explore immediately while still being able to tell you they're off.
+   */
+  cancelledPlans: Plan[];
   /** True until both subscriptions have reported once. */
   loading: boolean;
   error: string;
@@ -36,7 +41,7 @@ interface PlanFeedValue {
 }
 
 const EMPTY: PlanFeedValue = {
-  myPlans: [], friendPlans: [], loading: true, error: "",
+  myPlans: [], friendPlans: [], cancelledPlans: [], loading: true, error: "",
   isJoined: () => false, latest: (plan) => plan,
   pendingId: "", toggleJoin: async () => {}, joinError: "",
   myCoords: null, locating: true,
@@ -123,23 +128,34 @@ export function PlanFeedProvider({ children }: { children: ReactNode }) {
     [uid],
   );
 
+  // A cancelled plan comes off both tabs the moment its host calls it off —
+  // for the host, for everyone who'd joined, and for everyone still deciding.
+  const live = (plans: Plan[]) => plans.filter((p) => !p.cancelled);
+
   // Decorated once, and the only versions anything downstream sees — so a plan
   // handed to a sheet by `latest` carries the same distance as its card did.
-  const minePlus   = useMemo(() => withDistance(myPlans, myCoords), [myPlans, myCoords]);
-  const theirsPlus = useMemo(() => withDistance(friendPlans, myCoords), [friendPlans, myCoords]);
+  const minePlus   = useMemo(() => withDistance(live(myPlans), myCoords), [myPlans, myCoords]);
+  const theirsPlus = useMemo(() => withDistance(live(friendPlans), myCoords), [friendPlans, myCoords]);
 
+  // Only other people's: you don't need telling about a plan you called off.
+  const cancelledPlans = useMemo(() => friendPlans.filter((p) => p.cancelled), [friendPlans]);
+
+  // Cancelled plans are searched too. A sheet opened just before its host
+  // called the plan off would otherwise keep showing the copy it was handed,
+  // with a live Join button on a plan that no longer exists.
   const latest = useCallback(
     (plan: Plan) =>
       minePlus.find((p) => p.id === plan.id) ??
       theirsPlus.find((p) => p.id === plan.id) ??
+      cancelledPlans.find((p) => p.id === plan.id) ??
       plan,
-    [minePlus, theirsPlus],
+    [minePlus, theirsPlus, cancelledPlans],
   );
 
   const toggleJoin = useCallback(async (plan: Plan) => {
-    // Seeded demo plans have no document behind them, and the host leaving their
-    // own plan would strand everyone else on it.
-    if (!plan.hostUid || plan.hostUid === uid || pendingId) return;
+    // The host leaving their own plan would strand everyone else on it, and a
+    // plan that's been called off isn't joinable at all.
+    if (!plan.hostUid || plan.hostUid === uid || plan.cancelled || pendingId) return;
 
     setPendingId(plan.id);
     setJoinError("");
@@ -159,10 +175,11 @@ export function PlanFeedProvider({ children }: { children: ReactNode }) {
     () => ({
       myPlans: minePlus,
       friendPlans: theirsPlus,
+      cancelledPlans,
       loading, error, isJoined, latest, pendingId, toggleJoin, joinError,
       myCoords, locating,
     }),
-    [minePlus, theirsPlus, loading, error, isJoined, latest, pendingId, toggleJoin, joinError, myCoords, locating],
+    [minePlus, theirsPlus, cancelledPlans, loading, error, isJoined, latest, pendingId, toggleJoin, joinError, myCoords, locating],
   );
 
   return <PlanFeedContext.Provider value={value}>{children}</PlanFeedContext.Provider>;

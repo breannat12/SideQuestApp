@@ -108,16 +108,29 @@ const planLine = (plan: Plan) =>
 
 /**
  * Turns the live lists into a newest-first feed: one row per friend request
- * waiting on you, one per plan a friend sent you, and one per person who joined
- * something you host.
+ * waiting on you, one per plan a friend sent you, one per plan called off, and
+ * one per person who joined something you host.
  */
 export function buildNotifs(
   myPlans: Plan[],
   friendPlans: Plan[],
+  cancelledPlans: Plan[],
   requests: FriendRequest[],
   myUid: string,
 ): Notif[] {
   const out: Notif[] = [];
+
+  for (const plan of cancelledPlans) {
+    out.push({
+      id:     `cancel:${plan.id}`,
+      type:   "cancel",
+      title:  `${firstNameOf(plan.host)} cancelled ${plan.activity}`,
+      body:   `${planLine(plan)} — it's off.`,
+      at:     plan.cancelledAt ?? plan.startsAt ?? new Date(),
+      planId: plan.id,
+      read:   false,
+    });
+  }
 
   for (const request of requests) {
     const who = request.fromName || (request.fromUsername ? `@${request.fromUsername}` : "Someone");
@@ -177,15 +190,15 @@ export function buildNotifs(
  */
 export function useNotifs() {
   const { uid } = useCurrentUser();
-  const { myPlans, friendPlans } = usePlanFeed();
+  const { myPlans, friendPlans, cancelledPlans } = usePlanFeed();
   const { incoming } = useFriendRequests();
   const read = useSyncExternalStore(subscribeToReads, readSnapshot);
 
   useEffect(() => { loadReadFor(uid); }, [uid]);
 
   const notifs = useMemo(
-    () => buildNotifs(myPlans, friendPlans, incoming, uid).map((n) => ({ ...n, read: read.has(n.id) })),
-    [myPlans, friendPlans, incoming, uid, read],
+    () => buildNotifs(myPlans, friendPlans, cancelledPlans, incoming, uid).map((n) => ({ ...n, read: read.has(n.id) })),
+    [myPlans, friendPlans, cancelledPlans, incoming, uid, read],
   );
 
   const unread = notifs.reduce((count, n) => count + (n.read ? 0 : 1), 0);

@@ -13,16 +13,18 @@ const greeting = () => {
   return "Good evening";
 };
 
-export function HomeTab({ onPlanTap, onEdit, onBell, unread }: {
+export function HomeTab({ onPlanTap, onEdit, onCancel, onBell, unread }: {
   onPlanTap: (p: Plan) => void;
   /** SUGGEST CHANGES CODE: was `onSuggest`, and fired for joined plans too. */
   onEdit: (p: Plan) => void;
+  /** Raised to the app shell, which owns the confirmation dialog. */
+  onCancel: (p: Plan) => void;
   onBell: () => void;
   unread: number;
 }) {
   const { firstName, initials } = useCurrentUser();
   // Plans you host and plans you've joined, from the feed the whole app shares.
-  const { myPlans: plans, loading, error } = usePlanFeed();
+  const { myPlans: plans, loading, error, joinError } = usePlanFeed();
 
   const todayPlans = plans.filter((p) => isToday(p.startsAt));
   const laterPlans = plans.filter((p) => !isToday(p.startsAt));
@@ -61,6 +63,11 @@ export function HomeTab({ onPlanTap, onEdit, onBell, unread }: {
           <p className="text-sm font-bold text-center py-8" style={{ color: CORAL }}>{error}</p>
         )}
 
+        {/* Leaving a plan writes to the server, so it can fail. */}
+        {joinError && (
+          <p className="text-xs font-bold text-center mb-3" style={{ color: CORAL }}>{joinError}</p>
+        )}
+
         {!error && loading && (
           <p className="text-sm font-bold text-center py-12" style={{ color: LIGHT }}>Loading your plans…</p>
         )}
@@ -76,7 +83,7 @@ export function HomeTab({ onPlanTap, onEdit, onBell, unread }: {
                     style={{ background: SKY + "20", color: SKY }}>{todayPlans.length} plans</span>
                 </div>
                 {todayPlans.map((p) => (
-                  <MyPlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onEdit={() => onEdit(p)} />
+                  <MyPlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onEdit={() => onEdit(p)} onCancel={() => onCancel(p)} />
                 ))}
               </>
             )}
@@ -94,7 +101,7 @@ export function HomeTab({ onPlanTap, onEdit, onBell, unread }: {
                     style={{ background: LAVENDER + "20", color: LAVENDER }}>{laterPlans.length} plans</span>
                 </div>
                 {laterPlans.map((p) => (
-                  <MyPlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onEdit={() => onEdit(p)} />
+                  <MyPlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onEdit={() => onEdit(p)} onCancel={() => onCancel(p)} />
                 ))}
               </>
             )}

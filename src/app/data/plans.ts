@@ -150,6 +150,26 @@ export async function joinPlan(planId: string, myName: string): Promise<void> {
   });
 }
 
+/**
+ * Calls a plan off. Marked rather than deleted, and that's the whole trick:
+ * notifications in this app are derived from documents that exist, so deleting
+ * the plan would take the "it's cancelled" message down with it. The flag lets
+ * the plan disappear from every Home and Explore tab while still carrying word
+ * of its own cancellation to the people who were invited.
+ *
+ * It ages out on its own — `watchFriendPlans` drops anything well past its
+ * start time, so a cancelled plan stops being mentioned once it's moot.
+ */
+export async function cancelPlan(planId: string): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) throw new Error("not-signed-in");
+
+  await updateDoc(doc(db, "plans", planId), {
+    cancelled:   true,
+    cancelledAt: serverTimestamp(),
+  });
+}
+
 /** Backs you out again. The host can't leave their own plan — see the rules. */
 export async function leavePlan(planId: string): Promise<void> {
   const user = auth.currentUser;
@@ -160,6 +180,25 @@ export async function leavePlan(planId: string): Promise<void> {
     [`attendeeNames.${user.uid}`]: deleteField(),
     [`joinedAt.${user.uid}`]:      deleteField(),
   });
+}
+
+/**
+ * The location label for a plan pinned to wherever its host happened to be.
+ * Shared with the create flow so the two can't drift — the check below is a
+ * string comparison, and a reworded label would silently stop matching.
+ */
+export const CURRENT_LOCATION = "Current Location";
+
+/**
+ * The place line on a plan card: "Blue Bottle, Hayes Valley · 0.3 mi".
+ *
+ * The distance is dropped for a plan set to the host's current location. That
+ * label describes where *they* were, so pairing it with how far *you* are from
+ * it reads as a measurement of nothing.
+ */
+export function locationLine(plan: Plan): string {
+  if (!plan.distance || plan.location === CURRENT_LOCATION) return plan.location;
+  return `${plan.location} · ${plan.distance}`;
 }
 
 /** What the edit sheet is allowed to change on a plan you host. */
@@ -354,6 +393,8 @@ function toPlan(id: string, data: Record<string, unknown>, myUid: string): Plan 
     lat:         typeof data.lat === "number" ? data.lat : undefined,
     lng:         typeof data.lng === "number" ? data.lng : undefined,
     hostUid,
+    cancelled:   Boolean(data.cancelled),
+    cancelledAt: data.cancelledAt instanceof Timestamp ? data.cancelledAt.toDate() : undefined,
     createdAt:   data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
     audienceUids: Array.isArray(data.audienceUids) ? data.audienceUids.map(String) : [],
     roster,

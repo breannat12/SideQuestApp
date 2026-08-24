@@ -1,5 +1,5 @@
 import { Clock, MapPin, MessageCircle, Pencil, Share2, Users, X } from "lucide-react";
-import { CARD, CORAL, DARK, LAVENDER, MID, MINT, SKY, WHITE } from "../../constants/colors";
+import { CARD, CORAL, DANGER, DARK, LAVENDER, MID, MINT, SKY, WHITE } from "../../constants/colors";
 import { usePlanFeed } from "../../data/planFeed";
 import type { Plan } from "../../types";
 import { AvatarBubble } from "../common/AvatarBubble";
@@ -15,8 +15,9 @@ export function PlanDetailSheet({ plan: opened, onClose, onEdit }: { plan: Plan;
   const joined  = isJoined(plan);
   const pending = pendingId === plan.id;
   // The host is already on the roster, and letting them leave would strand
-  // everyone else on a plan with nobody running it.
-  const canJoin = plan.host !== "You";
+  // everyone else on a plan with nobody running it. A plan called off while
+  // this sheet was open isn't joinable by anyone.
+  const canJoin = plan.host !== "You" && !plan.cancelled;
 
   return (
     <div className="absolute inset-0 z-40 flex flex-col justify-end" style={{ background: "rgba(0,0,0,0.4)" }}>
@@ -75,6 +76,12 @@ export function PlanDetailSheet({ plan: opened, onClose, onEdit }: { plan: Plan;
                 ))}
               </div>
             </div>
+            {plan.cancelled && (
+              <p className="text-sm font-extrabold text-center mb-3 py-2.5 rounded-2xl"
+                style={{ background: DANGER + "18", color: DANGER }}>
+                🚫 {plan.host} cancelled this plan
+              </p>
+            )}
             {joinError && (
               <p className="text-xs font-bold text-center mb-3" style={{ color: CORAL }}>{joinError}</p>
             )}

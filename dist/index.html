@@ -2,22 +2,45 @@
   <!DOCTYPE html>
   <html lang="en">
     <head>
-      
+
       <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>Social Planning App UI</title>
-      <meta name="description" content="Connect with friends effortlessly to discover nearby activities, create plans in seconds, and manage availability for spontaneous hangouts." />
+      <!-- `viewport-fit=cover` lets the page reach under the notch and home
+           indicator, which is what the safe-area padding in App.tsx expects. -->
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+      <title>sidequest</title>
+      <meta name="description" content="Make plans with friends in seconds — see what's on nearby and join in." />
+      <!-- Still unlisted: this is a private test, not a launch. Drop this line
+           when you want the app to turn up in search. -->
       <meta name="robots" content="noindex, nofollow" />
+
+      <!-- Installed-app chrome. iOS reads these rather than the web manifest,
+           so they have to be repeated here even though vite-plugin-pwa
+           generates a manifest with the same values. -->
+      <meta name="theme-color" content="#EBF4FF" />
+      <meta name="mobile-web-app-capable" content="yes" />
+      <meta name="apple-mobile-web-app-capable" content="yes" />
+      <meta name="apple-mobile-web-app-title" content="sidequest" />
+      <!-- `default` keeps the status bar dark-on-light, which suits the pale
+           background; `black-translucent` would hide it behind the header. -->
+      <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+      <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+      <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+
+      <!-- Nunito itself is requested by src/styles/fonts.css. That @import sits
+           inside bundled CSS, so the browser only discovers the font host after
+           the stylesheet parses — these warm the connection before then. -->
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
       <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
-      
-      <script type="module" crossorigin src="/assets/index-CuclQfVZ.js"></script>
-      <link rel="stylesheet" crossorigin href="/assets/index-DfUsRBR1.css">
-    </head>
+
+      <script type="module" crossorigin src="/assets/index-CXEvmFT8.js"></script>
+      <link rel="stylesheet" crossorigin href="/assets/index-DB-lkLaF.css">
+    <link rel="manifest" href="/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script></head>
 
     <body>
-      
+
       <div id="root"></div>
-      
+
     </body>
   </html>
-  

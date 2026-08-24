@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 import { useEffect, useRef } from "react";
-import { CARD, CORAL, DARK, LAVENDER, LIGHT, MID, MINT, SKY, WHITE } from "../../constants/colors";
+import { CARD, CORAL, DANGER, DARK, LAVENDER, LIGHT, MID, MINT, SKY, WHITE } from "../../constants/colors";
 import { useFriendRequests } from "../../data/friendRequests";
 import { timeAgo, useNotifs } from "../../data/notifs";
 import type { Notif } from "../../types";
@@ -27,6 +27,7 @@ export function NotifDrawer({ onClose }: { onClose: () => void }) {
     // COINCIDENCE FEATURE -- icon for the nearby-friend notification kind.
     // if (type === "coincidence") return { bg: SKY + "20", emoji: "⚡" };
     if (type === "request")     return { bg: SKY + "20", emoji: "🙋" };
+    if (type === "cancel")      return { bg: DANGER + "20", emoji: "🚫" };
     if (type === "join")        return { bg: MINT + "20", emoji: "✓"  };
     if (type === "ping")        return { bg: CORAL + "20", emoji: "👋" };
     return { bg: LAVENDER + "20", emoji: "📅" };
