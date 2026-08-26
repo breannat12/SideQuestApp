@@ -4,10 +4,7 @@ import { NotifDrawer } from "./components/sheets/NotifDrawer";
 import { PlanDetailSheet } from "./components/sheets/PlanDetailSheet";
 import { CancelPlanDialog } from "./components/sheets/CancelPlanDialog";
 import { EditPlanSheet } from "./components/sheets/EditPlanSheet";
-// SUGGEST CHANGES CODE: the sheet for proposing a different time or place on a
-// plan someone else hosts. The file is still there, just unreferenced — restore
-// this import alongside the fork further down.
-// import { SuggestSheet } from "./components/sheets/SuggestSheet";
+import { SuggestSheet } from "./components/sheets/SuggestSheet";
 import { BG, CORAL, DARK, LAVENDER, MID, SKY, WHITE } from "./constants/colors";
 import { CurrentUserProvider, useCurrentUser } from "./data/currentUser";
 import { FriendRequestProvider } from "./data/friendRequests";
@@ -54,9 +51,10 @@ function AppShell() {
   const [tab, setTab]                 = useState<Tab>("home");
   const [notifOpen, setNotifOpen]     = useState(false);
   const [detailPlan, setDetailPlan]   = useState<Plan | null>(null);
-  // SUGGEST CHANGES CODE: was `suggestPlan`, and held anyone's plan. Now only
-  // ever your own, since editing is the one thing left that opens a sheet.
   const [editPlan, setEditPlan]       = useState<Plan | null>(null);
+  // Someone else's plan, marked flexible. Held apart from `editPlan` so the two
+  // sheets can't both believe they're open on the same plan.
+  const [suggestPlan, setSuggestPlan] = useState<Plan | null>(null);
   // Held here rather than in the card: the dialog dims the whole app, and a
   // card sits inside Home's scroll container where an overlay would be clipped.
   const [cancelling, setCancelling]   = useState<Plan | null>(null);
@@ -76,13 +74,19 @@ function AppShell() {
   }, [status, hasProfile]);
 
   const openEdit = (p: Plan) => {
-    // SUGGEST CHANGES CODE: this used to take any plan and let the fork below
-    // decide which sheet to show. Guarded now, so a plan you don't host can't
-    // reach the edit sheet by some other route — the rules would reject the
-    // write anyway, and failing silently here beats failing at the server.
+    // Guarded so a plan you don't host can't reach the edit sheet by some other
+    // route — the rules would reject the write anyway, and failing silently
+    // here beats failing at the server.
     if (p.host !== "You") return;
     setDetailPlan(null);
     setEditPlan(p);
+  };
+
+  /** The mirror of `openEdit`: only someone else's, and only if it can move. */
+  const openSuggest = (p: Plan) => {
+    if (p.host === "You" || !(p.flexTime || p.flexLoc)) return;
+    setDetailPlan(null);
+    setSuggestPlan(p);
   };
 
   return (
@@ -143,29 +147,30 @@ function AppShell() {
         )}
 
         {/* Notification drawer */}
-        {notifOpen && <NotifDrawer onClose={() => setNotifOpen(false)} />}
+        {notifOpen && (
+          <NotifDrawer
+            onClose={() => setNotifOpen(false)}
+            // The drawer stands over everything, so it has to stand down before
+            // the detail sheet it opened can be seen.
+            onOpenPlan={(p) => { setNotifOpen(false); setDetailPlan(p); }}
+          />
+        )}
 
         {/* Plan detail sheet */}
-        {detailPlan && !editPlan && (
+        {detailPlan && !editPlan && !suggestPlan && (
           <PlanDetailSheet
             plan={detailPlan}
             onClose={() => setDetailPlan(null)}
             onEdit={() => openEdit(detailPlan)}
+            onSuggest={() => openSuggest(detailPlan)}
           />
         )}
 
-        {/* Edit sheet — your own plan only.
-            SUGGEST CHANGES CODE: this was a fork, with SuggestSheet handling
-            plans hosted by someone else. To bring it back, restore:
-
-              {editPlan && (
-                editPlan.host === "You"
-                  ? <EditPlanSheet plan={editPlan} onClose={() => setEditPlan(null)} />
-                  : <SuggestSheet  plan={editPlan} onClose={() => setEditPlan(null)} />
-              )}
-
-            …and drop the host guard in `openEdit` above. */}
+        {/* Two sheets, one fork: you move your own plan, you suggest on
+            everyone else's. Which one opens is decided by `openEdit` and
+            `openSuggest`, both of which check who hosts it. */}
         {editPlan && <EditPlanSheet plan={editPlan} onClose={() => setEditPlan(null)} />}
+        {suggestPlan && <SuggestSheet plan={suggestPlan} onClose={() => setSuggestPlan(null)} />}
 
         {/* Last of the overlays, so it sits above anything else that's open. */}
         {cancelling && (
@@ -186,10 +191,8 @@ function AppShell() {
             </button>
           )}
 
-          {tab === "home"    && <HomeTab    onPlanTap={setDetailPlan} onEdit={openEdit} onCancel={setCancelling} onBell={() => setNotifOpen(true)} unread={unread} />}
-          {/* SUGGEST CHANGES CODE: Explore lists other people's plans only, so
-              it had `onSuggest={openSuggest}` here. Nothing to hand it now. */}
-          {tab === "explore" && <ExploreTab onPlanTap={setDetailPlan} />}
+          {tab === "home"    && <HomeTab    onPlanTap={setDetailPlan} onEdit={openEdit} onCancel={setCancelling} onSuggest={openSuggest} onBell={() => setNotifOpen(true)} unread={unread} />}
+          {tab === "explore" && <ExploreTab onPlanTap={setDetailPlan} onSuggest={openSuggest} />}
           {tab === "create"  && <CreateTab  onCreated={() => setTab("home")} />}
           {tab === "friends" && <FriendsTab />}
           {tab === "profile" && (

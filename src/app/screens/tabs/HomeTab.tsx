@@ -13,10 +13,12 @@ const greeting = () => {
   return "Good evening";
 };
 
-export function HomeTab({ onPlanTap, onEdit, onCancel, onBell, unread }: {
+export function HomeTab({ onPlanTap, onEdit, onCancel, onSuggest, onBell, unread }: {
   onPlanTap: (p: Plan) => void;
-  /** SUGGEST CHANGES CODE: was `onSuggest`, and fired for joined plans too. */
+  /** Your own plans only — the app shell guards it too. */
   onEdit: (p: Plan) => void;
+  /** A plan you joined, whose host left something open to suggestions. */
+  onSuggest: (p: Plan) => void;
   /** Raised to the app shell, which owns the confirmation dialog. */
   onCancel: (p: Plan) => void;
   onBell: () => void;
@@ -83,7 +85,10 @@ export function HomeTab({ onPlanTap, onEdit, onCancel, onBell, unread }: {
                     style={{ background: SKY + "20", color: SKY }}>{todayPlans.length} plans</span>
                 </div>
                 {todayPlans.map((p) => (
-                  <MyPlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onEdit={() => onEdit(p)} onCancel={() => onCancel(p)} />
+                  <MyPlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onEdit={() => onEdit(p)} onCancel={() => onCancel(p)}
+                    // Home carries plans you host as well as ones you joined,
+                    // so both halves of the test matter here.
+                    onSuggest={p.host !== "You" && (p.flexTime || p.flexLoc) ? () => onSuggest(p) : undefined} />
                 ))}
               </>
             )}
@@ -101,7 +106,10 @@ export function HomeTab({ onPlanTap, onEdit, onCancel, onBell, unread }: {
                     style={{ background: LAVENDER + "20", color: LAVENDER }}>{laterPlans.length} plans</span>
                 </div>
                 {laterPlans.map((p) => (
-                  <MyPlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onEdit={() => onEdit(p)} onCancel={() => onCancel(p)} />
+                  <MyPlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onEdit={() => onEdit(p)} onCancel={() => onCancel(p)}
+                    // Home carries plans you host as well as ones you joined,
+                    // so both halves of the test matter here.
+                    onSuggest={p.host !== "You" && (p.flexTime || p.flexLoc) ? () => onSuggest(p) : undefined} />
                 ))}
               </>
             )}

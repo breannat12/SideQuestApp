@@ -38,6 +38,13 @@ const cache = new Map<string, Place[]>();
 
 let proximity: Promise<[number, number] | null> | null = null;
 
+/**
+ * How the current fix was obtained. A browser fix is good to a few metres; an
+ * IP fix is good to a city. Naming a street from the second one would invent a
+ * precision that isn't there, so the reverse lookup below reads this first.
+ */
+let proximitySource: "browser" | "ip" | null = null;
+
 /** Precise coords, but only if permission is already granted (see below). */
 function fromBrowser(): Promise<[number, number] | null> {
   return (async () => {
@@ -86,7 +93,13 @@ async function fromIp(): Promise<[number, number] | null> {
  */
 function getProximity(): Promise<[number, number] | null> {
   if (proximity) return proximity;
-  proximity = (async () => (await fromBrowser()) ?? (await fromIp()))();
+  proximity = (async () => {
+    const precise = await fromBrowser();
+    if (precise) { proximitySource = "browser"; return precise; }
+    const coarse = await fromIp();
+    proximitySource = coarse ? "ip" : null;
+    return coarse;
+  })();
   return proximity;
 }
 
@@ -129,6 +142,79 @@ export function formatDistance(miles: number): string {
   if (miles < 0.1) return "< 0.1 mi";
   if (miles < 10)  return `${miles.toFixed(1)} mi`;
   return `${Math.round(miles)} mi`;
+}
+
+// ── Reverse lookup: coordinates → a name a friend can read ─────────────────
+
+const REVERSE = "https://api.geoapify.com/v1/geocode/reverse";
+
+/**
+ * What to call the spot you're standing on.
+ *
+ * A plan pinned "here" stores your coordinates, which is all a distance needs —
+ * but a friend reading the card needs a *name*. Without one the card says
+ * "Current Location", which describes where the host was and tells the reader
+ * nothing.
+ *
+ * Resolved once, by the host, at the moment they share — not by each viewer on
+ * every snapshot. One credit per plan instead of one per reader per render, and
+ * the label that lands in Firestore is then the same everywhere it appears:
+ * card, detail sheet, and the "now meets at…" notification.
+ *
+ * Granularity follows the fix behind the coordinates. A browser fix names the
+ * building or street; an IP fix only ever names the neighbourhood or city,
+ * because a street address derived from a city-level fix would be a fiction.
+ *
+ * Returns null rather than throwing — a plan whose label couldn't be resolved
+ * is still a perfectly good plan, and blocking the share on a geocode would be
+ * a poor trade.
+ */
+export async function describeCoords(at: Coords): Promise<string | null> {
+  if (!PLACES_ENABLED) return null;
+
+  const precise = proximitySource === "browser";
+  const url = new URL(REVERSE);
+  url.searchParams.set("lat", String(at.lat));
+  url.searchParams.set("lon", String(at.lng));
+  url.searchParams.set("apiKey", KEY!);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("limit", "1");
+  // Asking the API itself for a coarse answer, rather than requesting a street
+  // and discarding it, keeps the returned point honest too.
+  if (!precise) url.searchParams.set("type", "city");
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json() as { results?: ReverseResult[] };
+    const hit = data.results?.[0];
+    if (!hit) return null;
+
+    if (precise) {
+      // `address_line1` is the business name for a venue and the street for a
+      // plain address — the right headline either way, same as in search.
+      const line = hit.address_line1 || hit.name || hit.street || "";
+      const area = hit.suburb || hit.neighbourhood || hit.district || hit.city || "";
+      // "Blue Bottle Coffee, Hayes Valley" — the venue alone can be ambiguous
+      // across a city, and the area is what makes it findable.
+      return [line, area && area !== line ? area : ""].filter(Boolean).join(", ") || null;
+    }
+    return hit.suburb || hit.neighbourhood || hit.district || hit.city || null;
+  } catch {
+    // Offline, blocked, out of quota. The caller keeps its placeholder.
+    return null;
+  }
+}
+
+/** Only the fields read off a reverse-geocode hit. */
+interface ReverseResult {
+  name?: string;
+  street?: string;
+  address_line1?: string;
+  suburb?: string;
+  neighbourhood?: string;
+  district?: string;
+  city?: string;
 }
 
 // ── Search ─────────────────────────────────────────────────────────────────

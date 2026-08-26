@@ -1,18 +1,27 @@
-// SUGGEST CHANGES CODE: `Pencil` iconed the "Suggest Change" button.
-import { MapPin } from "lucide-react";
-import { CARD, DANGER, DARK, LAVENDER, MID, PEACH, SKY, WHITE } from "../../constants/colors";
+import { MapPin, Pencil } from "lucide-react";
+import { CARD, DANGER, DARK, LAVENDER, MID, MINT, PEACH, SKY, WHITE } from "../../constants/colors";
 import { usePlanFeed } from "../../data/planFeed";
 import { locationLine } from "../../data/plans";
 import type { Plan } from "../../types";
 import { AvatarBubble } from "../common/AvatarBubble";
 
-// SUGGEST CHANGES CODE: `onSuggest` did double duty here — "Edit Plan" when you
-// host, "Suggest Change" when you'd only joined. It's edit-only now, hence the
-// rename.
-export function MyPlanCard({ plan, onTap, onEdit, onCancel }: {
+
+/** Same marker as the Explore card — see `FlexChip` there for the reasoning. */
+function FlexChip() {
+  return (
+    <span className="text-xs font-extrabold px-1.5 py-0.5 rounded-md flex-shrink-0"
+      style={{ background: MINT + "22", color: "#3E9E6E", fontSize: 10 }}>
+      flexible
+    </span>
+  );
+}
+
+export function MyPlanCard({ plan, onTap, onEdit, onCancel, onSuggest }: {
   plan: Plan;
   onTap: () => void;
   onEdit: () => void;
+  /** Offered on a plan you joined that its host marked flexible. */
+  onSuggest?: () => void;
   /** Opens the confirmation dialog. Cancelling itself happens there. */
   onCancel: () => void;
 }) {
@@ -61,9 +70,15 @@ export function MyPlanCard({ plan, onTap, onEdit, onCancel }: {
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <h3 className="font-extrabold text-sm leading-tight" style={{ color: DARK }}>{plan.activity}</h3>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <h3 className="font-extrabold text-sm leading-tight truncate" style={{ color: DARK }}>{plan.activity}</h3>
+                  {(plan.flexTime || plan.flexLoc) && <FlexChip />}
+                </div>
                 <p className="text-xs mt-1 truncate" style={{ color: MID }}>
-                  {isHost ? plan.group : `by ${plan.host} · ${plan.group}`}
+                  {/* Your own plan says who you sent it to. A plan you joined
+                      names its host and stops there — whose group you're in is
+                      theirs to know, not yours. */}
+                  {isHost ? plan.group : `by ${plan.host}`}
                 </p>
               </div>
               <span className="text-xs font-extrabold px-2.5 py-1 rounded-full flex-shrink-0"
@@ -109,20 +124,22 @@ export function MyPlanCard({ plan, onTap, onEdit, onCancel }: {
               </button>
             </>
           ) : (
-            /* SUGGEST CHANGES CODE: a plan you'd joined paired Leave with a
-               "Suggest Change" button. Leave takes the full row now:
-
-                 <button onClick={(e) => { e.stopPropagation(); onEdit(); }}
-                   className="flex-1 py-2.5 rounded-2xl text-xs font-extrabold"
-                   style={{ background: LAVENDER + "18", color: LAVENDER }}>
-                   <Pencil size={11} style={{ display: "inline", marginRight: 4 }} />Suggest Change
-                 </button>
-            */
-            <button onClick={(e) => { e.stopPropagation(); void toggleJoin(plan); }} disabled={leaving}
-              className="flex-1 py-2.5 rounded-2xl text-xs font-extrabold"
-              style={{ background: DANGER, color: WHITE, opacity: leaving ? 0.6 : 1 }}>
-              {leaving ? "Leaving…" : "Leave"}
-            </button>
+            <>
+              {/* Back where it used to sit, but earned rather than always on:
+                  only a plan whose host marked something flexible offers it. */}
+              {onSuggest && (
+                <button onClick={(e) => { e.stopPropagation(); onSuggest(); }}
+                  className="flex-1 py-2.5 rounded-2xl text-xs font-extrabold flex items-center justify-center gap-1"
+                  style={{ background: LAVENDER + "22", color: "#6D4FD8" }}>
+                  <Pencil size={11} /> Suggest
+                </button>
+              )}
+              <button onClick={(e) => { e.stopPropagation(); void toggleJoin(plan); }} disabled={leaving}
+                className="flex-1 py-2.5 rounded-2xl text-xs font-extrabold"
+                style={{ background: DANGER, color: WHITE, opacity: leaving ? 0.6 : 1 }}>
+                {leaving ? "Leaving…" : "Leave"}
+              </button>
+            </>
           )}
         </div>
       </div>

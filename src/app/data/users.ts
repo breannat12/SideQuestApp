@@ -23,7 +23,7 @@ import {
   startAt,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
-import type { DirectoryUser, StoredProfile } from "../types";
+import type { DirectoryUser, FriendStatus, StoredProfile } from "../types";
 
 /** Auth's own floor. Surfaced here so the form can check before a round trip. */
 export const MIN_PASSWORD_LENGTH = 6;
@@ -52,6 +52,23 @@ export async function saveRadius(miles: number): Promise<void> {
   const user = auth.currentUser;
   if (!user) return;
   await setDoc(doc(db, "users", user.uid), { radiusMiles: miles }, { merge: true });
+}
+
+// ── Availability ───────────────────────────────────────────────────────────
+
+export const STATUS_DEFAULT: FriendStatus = "available";
+
+const STATUSES: FriendStatus[] = ["available", "busy", "dnd"];
+
+/** Anything unrecognised — an older row, a hand-edited one — reads as available. */
+const readStatus = (value: unknown): FriendStatus =>
+  STATUSES.includes(value as FriendStatus) ? (value as FriendStatus) : STATUS_DEFAULT;
+
+/** Merged onto the profile row, same as the radius above. */
+export async function saveStatus(status: FriendStatus): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) return;
+  await setDoc(doc(db, "users", user.uid), { status }, { merge: true });
 }
 
 // ── Step 1: create the account ─────────────────────────────────────────────
@@ -107,7 +124,12 @@ export async function fetchProfile(uid: string): Promise<StoredProfile | null> {
   const handle = String(data.username ?? "");
   if (!name && !handle) return null;
 
-  return { name, handle, radius: readRadius(data.radiusMiles) };
+  return {
+    name,
+    handle,
+    radius: readRadius(data.radiusMiles),
+    status: readStatus(data.status),
+  };
 }
 
 // ── Step 2: claim a name and handle ────────────────────────────────────────

@@ -3,8 +3,9 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
   type ReactNode,
 } from "react";
+import type { FriendStatus } from "../types";
 import { auth } from "./firebase";
-import { RADIUS_DEFAULT, fetchProfile, saveRadius } from "./users";
+import { RADIUS_DEFAULT, STATUS_DEFAULT, fetchProfile, saveRadius, saveStatus } from "./users";
 
 /**
  * Dragging the radius slider fires a change per half-mile step; only the value
@@ -42,9 +43,20 @@ interface CurrentUserValue {
   initials: string;
   /** Alert radius in miles, as picked during onboarding or on Profile. */
   radius: number;
+  /**
+   * Availability, as last set on Profile. Persisted, so it outlives a reload.
+   * Named apart from `status` above, which is how far auth has got — two
+   * different ideas that both want the word.
+   */
+  availability: FriendStatus;
+  /** True while availability is "dnd" — the one setting that silences the bell. */
+  dnd: boolean;
   setProfile: (name: string, handle: string) => void;
   /** Applies immediately; the write to Firestore is debounced. */
   setRadius: (miles: number) => void;
+  /** Applies immediately; the write follows. Unlike the radius, one tap is one
+      deliberate choice, so there's nothing to debounce away. */
+  setAvailability: (next: FriendStatus) => void;
 }
 
 const deriveInitials = (name: string) => {
@@ -68,15 +80,19 @@ const CurrentUserContext = createContext<CurrentUserValue>({
   firstName: "there",
   initials: "?",
   radius: RADIUS_DEFAULT,
+  availability: STATUS_DEFAULT,
+  dnd: false,
   setProfile: () => {},
   setRadius: () => {},
+  setAvailability: () => {},
 });
 
 export function CurrentUserProvider({ children }: { children: ReactNode }) {
-  const [status, setStatus]        = useState<AuthStatus>("loading");
+  const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
   const [uid, setUid]              = useState("");
   const [profile, setProfileState] = useState({ name: "", handle: "" });
   const [radius, setRadiusState]   = useState(RADIUS_DEFAULT);
+  const [availability, setAvailabilityState] = useState<FriendStatus>(STATUS_DEFAULT);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelPendingSave = () => {
@@ -94,6 +110,13 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
     }, RADIUS_SAVE_DELAY_MS);
   }, []);
 
+  const setAvailability = useCallback((next: FriendStatus) => {
+    setAvailabilityState(next);
+    // Optimistic, like the radius: the button has already moved, and a failed
+    // write just means the previous status is what loads next time.
+    void saveStatus(next).catch(() => {});
+  }, []);
+
   useEffect(() => cancelPendingSave, []);
 
   // Covers the log-in path (and a page refresh mid-session), where nothing in
@@ -108,7 +131,8 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
         setUid("");
         setProfileState({ name: "", handle: "" });
         setRadiusState(RADIUS_DEFAULT);
-        setStatus("signedOut");
+        setAvailabilityState(STATUS_DEFAULT);
+        setAuthStatus("signedOut");
         return;
       }
 
@@ -120,6 +144,7 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
         if (saved) {
           stored = { name: saved.name || stored.name, handle: saved.handle };
           setRadiusState(saved.radius);
+          setAvailabilityState(saved.status);
         }
       } catch {
         // Offline or rules-blocked: displayName alone is still better than nothing.
@@ -127,13 +152,13 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
 
       setProfileState((prev) => (prev.name || prev.handle ? prev : stored));
       // Set last, and only once the lookup has had its say: boot routing keys
-      // off `status`, and reading it early would send a returning user to setup.
-      setStatus("signedIn");
+      // off auth status, and reading it early would send a returning user to setup.
+      setAuthStatus("signedIn");
     });
   }, []);
 
   const value = useMemo<CurrentUserValue>(() => ({
-    status,
+    status: authStatus,
     uid,
     hasProfile: Boolean(profile.name),
     name:      profile.name,
@@ -141,10 +166,13 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
     firstName: profile.name.trim().split(/\s+/)[0] || "there",
     initials:  deriveInitials(profile.name),
     radius,
+    availability,
+    dnd: availability === "dnd",
     setProfile: (name, handle) =>
       setProfileState({ name: name.trim(), handle: handle.trim().toLowerCase() }),
     setRadius,
-  }), [status, uid, profile, radius, setRadius]);
+    setAvailability,
+  }), [authStatus, uid, profile, radius, availability, setRadius, setAvailability]);
 
   return <CurrentUserContext.Provider value={value}>{children}</CurrentUserContext.Provider>;
 }

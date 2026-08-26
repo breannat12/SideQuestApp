@@ -8,11 +8,10 @@ import { useMyGroups } from "../../data/groups";
 import { usePlanFeed } from "../../data/planFeed";
 import type { Plan } from "../../types";
 
-// SUGGEST CHANGES CODE: this also took `onSuggest: (p: Plan) => void`, passed
-// down to each card. Everything on this tab is someone else's plan, so there is
-// nothing left here to suggest a change to.
-export function ExploreTab({ onPlanTap }: {
+export function ExploreTab({ onPlanTap, onSuggest }: {
   onPlanTap: (p: Plan) => void;
+  /** Opens the suggestion sheet. Offered per-card, on flexible plans only. */
+  onSuggest: (p: Plan) => void;
 }) {
   const { groups } = useMyGroups();
   const { friends } = useMyFriends();
@@ -127,7 +126,10 @@ export function ExploreTab({ onPlanTap }: {
         ) : filtered.length > 0 ? (
           filtered.map((p) => (
             <PlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} compact
-              onJoin={() => void toggleJoin(p)} joined={isJoined(p)} pending={pendingId === p.id} />
+              onJoin={() => void toggleJoin(p)} joined={isJoined(p)} pending={pendingId === p.id}
+              // Every plan here is someone else's, so the host check is already
+              // made — all that's left is whether they said it could move.
+              onSuggest={p.flexTime || p.flexLoc ? () => onSuggest(p) : undefined} />
           ))
         ) : filtering ? (
           <div className="flex flex-col items-center py-10 gap-3">

@@ -1,9 +1,9 @@
 import { Check, Clock, MapPin, Navigation, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { CARD, CORAL, DARK, LAVENDER, LIGHT, MID, MINT, SKY, WHITE } from "../../constants/colors";
-import { MIN_QUERY, PLACES_ENABLED, suggestPlaces } from "../../data/places";
+import { describeCoords, getMyCoords, MIN_QUERY, PLACES_ENABLED, suggestPlaces } from "../../data/places";
 import {
-  clockLabel, planErrorMessage, startsAtFor, startsAtForClock, updatePlan,
+  clockLabel, planErrorMessage, QUICK_TIMES, startsAtFor, startsAtForClock, updatePlan,
 } from "../../data/plans";
 import type { ClockTime } from "../../data/plans";
 import type { Place, Plan } from "../../types";
@@ -11,9 +11,6 @@ import { ClockPickerModal, defaultClock } from "../common/ClockPicker";
 
 /** Matches the debounce on the create flow — same quota, same reasoning. */
 const SEARCH_DEBOUNCE_MS = 300;
-
-/** The quick moves. Anything else is what the wheel picker is for. */
-const QUICK_TIMES = ["Now", "In 30 mins", "In 1 hr"];
 
 /**
  * Moves a plan you host, in the same shape as suggesting a change to someone
@@ -39,6 +36,8 @@ export function EditPlanSheet({ plan, onClose }: { plan: Plan; onClose: () => vo
   const [saving, setSaving]     = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saved, setSaved]       = useState(false);
+  /** What the place actually became — the resolved name, not the placeholder. */
+  const [savedPlace, setSavedPlace] = useState("");
 
   const timeLabel = clock ? clockLabel(clock) : quick;
   const newLocation =
@@ -97,7 +96,27 @@ export function EditPlanSheet({ plan, onClose }: { plan: Plan; onClose: () => vo
           startsAt: clock ? startsAtForClock(clock) : startsAtFor(timeLabel!),
         });
       } else {
-        await updatePlan(plan.id, { location: newLocation });
+        // Moving the place has to move the coordinates with it, or every card
+        // goes on showing how far away the *old* one was.
+        const coords =
+          locMode === "current"
+            ? await getMyCoords().catch(() => null)
+            : place
+              ? { lat: place.lat, lng: place.lng }
+              : null;
+
+        // Same reasoning as the create flow: "Current Location" names nowhere
+        // to the people it's shared with, so it's resolved before it's stored.
+        const resolved =
+          locMode === "current" && coords ? await describeCoords(coords) : null;
+        const label = resolved ?? newLocation;
+
+        await updatePlan(plan.id, {
+          location: label,
+          lat: coords?.lat ?? null,
+          lng: coords?.lng ?? null,
+        });
+        setSavedPlace(label);
       }
       setSaved(true);
     } catch (err) {
@@ -118,8 +137,10 @@ export function EditPlanSheet({ plan, onClose }: { plan: Plan; onClose: () => vo
           <p className="text-sm text-center leading-relaxed" style={{ color: MID }}>
             {tab === "time"
               ? `${plan.activity} now starts ${timeLabel}.`
-              : `${plan.activity} now meets at ${newLocation}.`}
-            <br />Everyone who joined will see the change.
+              : `${plan.activity} now meets at ${savedPlace || newLocation}.`}
+            <br />{plan.group && plan.group !== "Everyone"
+              ? `Everyone in ${plan.group} gets a heads-up.`
+              : "Everyone you shared it with gets a heads-up."}
           </p>
           <button onClick={onClose}
             className="w-full py-3.5 rounded-2xl font-extrabold text-white"

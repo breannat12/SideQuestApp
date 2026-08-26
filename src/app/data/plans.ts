@@ -14,28 +14,31 @@ import {
   where,
 } from "firebase/firestore";
 import { LAVENDER, MINT, PEACH, SKY } from "../constants/colors";
-import type { Attendee, NewPlan, Plan } from "../types";
+import type { Attendee, NewPlan, Plan, Suggestion } from "../types";
 import { ME } from "./currentUser";
 import { auth, db } from "./firebase";
 import { avatarColorFor, initialsFor } from "./friends";
 
 // ── Saved plans ────────────────────────────────────────────────────────────
 
-/** Turns the chosen time chip into a real moment, so plans can be ordered. */
+/**
+ * The quick moves, in one place so the create, edit and suggest flows can't
+ * drift apart. Anything beyond an hour out is what the wheel picker is for.
+ */
+export const QUICK_TIMES: readonly string[] = ["Now", "In 30 min", "In 1 hr"];
+
+/**
+ * Turns the chosen time chip into a real moment, so plans can be ordered.
+ *
+ * Three chips and the wheel picker, nothing else: "Tonight" and "Tomorrow" are
+ * guesses at an hour the person never actually chose, and anything further out
+ * than an hour is better picked exactly than approximated by a chip.
+ */
 export function startsAtFor(timeLabel: string): Date {
   const at = new Date();
-  if (timeLabel.includes("30 min")) at.setMinutes(at.getMinutes() + 30);
+  if (timeLabel.includes("30 min"))     at.setMinutes(at.getMinutes() + 30);
   else if (timeLabel.includes("1 hr"))  at.setHours(at.getHours() + 1);
-  else if (timeLabel.includes("2 hrs")) at.setHours(at.getHours() + 2);
-  else if (timeLabel === "Tonight") {
-    at.setHours(19, 0, 0, 0);
-    // Picking "Tonight" after 7pm means the coming evening, not one gone by.
-    if (at.getTime() < Date.now()) at.setDate(at.getDate() + 1);
-  } else if (timeLabel === "Tomorrow") {
-    at.setDate(at.getDate() + 1);
-    at.setHours(12, 0, 0, 0);
-  }
-  return at;
+  return at;   // "Now", and anything unrecognised, starts now
 }
 
 /** A time picked by hand on the Create tab. */
@@ -72,12 +75,12 @@ function formatWhen(startsAt: Date): string {
   const minsAway = (startsAt.getTime() - Date.now()) / 60000;
   if (minsAway <= 5 && minsAway >= -30) return "Now";
 
-  if (isToday(startsAt)) {
-    return startsAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  }
-  const day  = startsAt.toLocaleDateString([], { weekday: "short" });
-  const hour = startsAt.toLocaleTimeString([], { hour: "numeric" });
-  return `${day} ${hour}`;
+  // Minutes are kept on both branches. A plan set for 9:40 that rolls to
+  // tomorrow used to read "Sat 9 AM" — the same rounding that would have people
+  // turning up forty minutes early.
+  const time = startsAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (isToday(startsAt)) return time;
+  return `${startsAt.toLocaleDateString([], { weekday: "short" })} ${time}`;
 }
 
 /**
@@ -189,16 +192,37 @@ export async function leavePlan(planId: string): Promise<void> {
  */
 export const CURRENT_LOCATION = "Current Location";
 
+/** "Mia K." → "Mia", for the fallback label below. */
+const firstNameOf = (name: string) => name.trim().split(/\s+/)[0] || "Someone";
+
+/**
+ * What to call a plan's location.
+ *
+ * A plan pinned "here" normally stores a real place name — its host's position
+ * is resolved to one at share time, see `describeCoords`. This covers the plans
+ * where that couldn't happen: ones shared before it existed, and ones shared
+ * with the lookup unavailable. They still carry the placeholder, which names
+ * somewhere only to the person who picked it, so for anyone else it's named
+ * after its host instead.
+ */
+export function locationLabel(plan: Plan): string {
+  if (plan.location !== CURRENT_LOCATION) return plan.location;
+  return plan.host === "You" ? CURRENT_LOCATION : `${firstNameOf(plan.host)}'s location`;
+}
+
 /**
  * The place line on a plan card: "Blue Bottle, Hayes Valley · 0.3 mi".
  *
- * The distance is dropped for a plan set to the host's current location. That
- * label describes where *they* were, so pairing it with how far *you* are from
- * it reads as a measurement of nothing.
+ * The distance is dropped only on your own plan pinned to where you are —
+ * how far you are from yourself isn't a measurement. On someone else's it
+ * holds even when the name didn't resolve, because the coordinates behind it
+ * are their real position.
  */
 export function locationLine(plan: Plan): string {
-  if (!plan.distance || plan.location === CURRENT_LOCATION) return plan.location;
-  return `${plan.location} · ${plan.distance}`;
+  const label = locationLabel(plan);
+  const mine  = plan.location === CURRENT_LOCATION && plan.host === "You";
+  if (!plan.distance || mine) return label;
+  return `${label} · ${plan.distance}`;
 }
 
 /** What the edit sheet is allowed to change on a plan you host. */
@@ -206,22 +230,167 @@ export interface PlanEdit {
   timeLabel?: string;
   startsAt?: Date;
   location?: string;
+  /**
+   * Where the new place is. `null` clears them: a location typed by hand has no
+   * coordinates, and leaving the last place's behind would have every card
+   * measuring the distance to somewhere the plan no longer is.
+   */
+  lat?: number | null;
+  lng?: number | null;
 }
+
+/** Which half of a plan its host last moved. Drives the "New time…" notification. */
+export type PlanEditKind = "time" | "location" | "both";
+
+export const isPlanEditKind = (value: unknown): value is PlanEditKind =>
+  value === "time" || value === "location" || value === "both";
 
 /**
  * Moves a plan you host. Only time and place: everything else about a plan is
  * settled once it's out, and the rules only let its host through anyway.
+ *
+ * The write stamps *what* moved next to *when* it moved. Notifications in this
+ * app are derived from the plan documents themselves (see `buildNotifs`), so
+ * without those two fields an edit is invisible to the friends it was sent to —
+ * the plan quietly changes underneath them and nothing says so.
  */
 export async function updatePlan(id: string, edit: PlanEdit): Promise<void> {
   const user = auth.currentUser;
   if (!user) throw new Error("not-signed-in");
 
-  const patch: Record<string, string | Timestamp | FieldValue> = { updatedAt: serverTimestamp() };
+  const movedTime  = edit.timeLabel !== undefined || edit.startsAt !== undefined;
+  const movedPlace = edit.location  !== undefined;
+
+  const patch: Record<string, string | number | Timestamp | FieldValue> = {};
   if (edit.timeLabel !== undefined) patch.timeLabel = edit.timeLabel;
   if (edit.startsAt  !== undefined) patch.startsAt  = Timestamp.fromDate(edit.startsAt);
   if (edit.location  !== undefined) patch.location  = edit.location;
+  if (edit.lat !== undefined) patch.lat = edit.lat === null ? deleteField() : edit.lat;
+  if (edit.lng !== undefined) patch.lng = edit.lng === null ? deleteField() : edit.lng;
+
+  // Only an edit that actually moved something is announced, and `updatedAt`
+  // moves with it — the notification is keyed on that timestamp, so a second
+  // edit arrives as a second unread row rather than reviving the first.
+  if (movedTime || movedPlace) {
+    patch.lastEditKind = movedTime && movedPlace ? "both" : movedTime ? "time" : "location";
+    patch.updatedAt    = serverTimestamp();
+  } else {
+    return;   // nothing to change, and an empty write would still bump the doc
+  }
 
   await updateDoc(doc(db, "plans", id), patch);
+}
+
+/**
+ * Proposes a different time or place on a plan someone else hosts.
+ *
+ * Written onto the plan document rather than into a collection of its own, and
+ * keyed by who made it. Three things fall out of that: the host is already
+ * subscribed to their own plans, so a suggestion arrives in a snapshot they're
+ * paying for anyway; no new query means no composite index to go and create;
+ * and one person can only ever hold one open suggestion per plan, because a
+ * second write lands on the same key.
+ *
+ * The security rules mirror `joinPlan`'s trick — the write is accepted only
+ * from someone the plan was addressed to, only under their own uid, and only
+ * when it touches nothing else on the document.
+ */
+export interface NewSuggestion {
+  kind: "time" | "location";
+  /** What the host will read: a time label, or a place name. */
+  value: string;
+  /** Required on a time suggestion — see `Suggestion.startsAt`. */
+  startsAt?: Date;
+  lat?: number;
+  lng?: number;
+}
+
+export async function suggestChange(
+  planId: string,
+  s: NewSuggestion,
+  myName: string,
+): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) throw new Error("not-signed-in");
+
+  await updateDoc(doc(db, "plans", planId), {
+    [`suggestions.${user.uid}`]: {
+      name:  myName || user.displayName || "",
+      kind:  s.kind,
+      value: s.value,
+      // Firestore rejects an undefined value outright, so each of these is
+      // spread in only when it actually exists.
+      ...(s.startsAt ? { startsAt: Timestamp.fromDate(s.startsAt) } : {}),
+      ...(typeof s.lat === "number" && typeof s.lng === "number"
+        ? { lat: s.lat, lng: s.lng }
+        : {}),
+      // A client clock, as with `joinedAt`: `serverTimestamp()` isn't allowed
+      // inside a map value, and this only drives a "4m ago" label.
+      at: Timestamp.now(),
+    },
+  });
+}
+
+/**
+ * Takes a friend up on their suggestion. One write, which does three things:
+ * moves the plan, clears the suggestion now that it's been answered, and
+ * stamps the edit — so accepting tells the whole audience the plan changed by
+ * exactly the same route a manual edit does.
+ */
+export async function acceptSuggestion(planId: string, s: Suggestion): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) throw new Error("not-signed-in");
+
+  const patch: Record<string, unknown> = {
+    [`suggestions.${s.uid}`]: deleteField(),
+    lastEditKind: s.kind,
+    updatedAt:    serverTimestamp(),
+  };
+
+  if (s.kind === "time") {
+    patch.timeLabel = s.value;
+    // The stored moment, or a best effort from the label for a suggestion made
+    // before those were carried. A quick-chip label still parses.
+    patch.startsAt = Timestamp.fromDate(s.startsAt ?? startsAtFor(s.value));
+  } else {
+    patch.location = s.value;
+    // Cleared rather than left behind when the new place has no coordinates,
+    // for the same reason `updatePlan` clears them.
+    patch.lat = typeof s.lat === "number" ? s.lat : deleteField();
+    patch.lng = typeof s.lng === "number" ? s.lng : deleteField();
+  }
+
+  await updateDoc(doc(db, "plans", planId), patch);
+}
+
+/** Declining one, or withdrawing your own — both just take it off the plan. */
+export async function clearSuggestion(planId: string, uid: string): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) throw new Error("not-signed-in");
+  await updateDoc(doc(db, "plans", planId), {
+    [`suggestions.${uid}`]: deleteField(),
+  });
+}
+
+/** The proposed changes on a plan, newest first. */
+function toSuggestions(data: Record<string, unknown>): Suggestion[] {
+  return Object.entries(asMap(data.suggestions))
+    .map(([uid, raw]) => {
+      const entry = asMap(raw);
+      const at    = entry.at;
+      return {
+        uid,
+        name:  String(entry.name ?? ""),
+        kind:  entry.kind === "location" ? "location" as const : "time" as const,
+        value: String(entry.value ?? ""),
+        startsAt: entry.startsAt instanceof Timestamp ? entry.startsAt.toDate() : undefined,
+        lat:   typeof entry.lat === "number" ? entry.lat : undefined,
+        lng:   typeof entry.lng === "number" ? entry.lng : undefined,
+        at:    at instanceof Timestamp ? at.toDate() : undefined,
+      };
+    })
+    .filter((s) => s.value)
+    .sort((a, b) => (b.at?.getTime() ?? 0) - (a.at?.getTime() ?? 0));
 }
 
 /**
@@ -396,8 +565,11 @@ function toPlan(id: string, data: Record<string, unknown>, myUid: string): Plan 
     cancelled:   Boolean(data.cancelled),
     cancelledAt: data.cancelledAt instanceof Timestamp ? data.cancelledAt.toDate() : undefined,
     createdAt:   data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
+    updatedAt:   data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : undefined,
+    lastEdit:    isPlanEditKind(data.lastEditKind) ? data.lastEditKind : undefined,
     audienceUids: Array.isArray(data.audienceUids) ? data.audienceUids.map(String) : [],
     roster,
+    suggestions: toSuggestions(data),
   };
 }
 

@@ -29,10 +29,16 @@ export interface Plan {
   hostUid?: string;
   /** When it was shared. Orders the "new plan from…" notifications. */
   createdAt?: Date;
+  /** When its host last moved it. Absent until they do — see `updatePlan`. */
+  updatedAt?: Date;
+  /** Which half they moved, so the notification can name it. */
+  lastEdit?: "time" | "location" | "both";
   /** Friend uids the host sent it to — the audience that can see and join it. */
   audienceUids?: string[];
   /** Everyone who's in, host first. `attendees` is just its length. */
   roster?: Attendee[];
+  /** Changes friends have proposed. Only ever set on a plan marked flexible. */
+  suggestions?: Suggestion[];
   /** Called off by its host. Kept rather than deleted — see `cancelPlan`. */
   cancelled?: boolean;
   cancelledAt?: Date;
@@ -43,6 +49,31 @@ export interface Attendee {
   uid: string; name: string;
   /** Absent for the instant between a local write and the server's reply. */
   joinedAt?: Date;
+}
+
+/**
+ * A change someone has proposed to a plan they were invited to.
+ *
+ * Stored on the plan itself, keyed by who made it, so one person holds one
+ * open suggestion per plan — suggesting again replaces it rather than piling
+ * up, and the host reads them all from the snapshot they already have.
+ */
+export interface Suggestion {
+  uid: string; name: string;
+  kind: "time" | "location";
+  /** The proposed time label or place name, ready to display. */
+  value: string;
+  /**
+   * The moment behind a time suggestion. Carried alongside the label because
+   * the label alone can't be turned back into a time — "Tomorrow 9:40 AM" is
+   * for reading, not parsing — and accepting one has to set a real `startsAt`.
+   */
+  startsAt?: Date;
+  /** Where a place suggestion is, so accepting moves the distance with it. */
+  lat?: number;
+  lng?: number;
+  /** Absent for the instant between a local write and the server's reply. */
+  at?: Date;
 }
 
 /** Everything the create flow collects, before it becomes a stored plan. */
@@ -63,7 +94,7 @@ export interface Notif {
   // COINCIDENCE FEATURE -- the "coincidence" notification kind. Restore it to
   // this union alongside the icon branch in NotifDrawer.
   // type: "coincidence" | "join" | "plan" | "ping" | "request";
-  type: "join" | "plan" | "ping" | "request" | "cancel";
+  type: "join" | "plan" | "ping" | "request" | "cancel" | "update" | "suggest";
   title: string; body: string; read: boolean;
   /** When it happened. The drawer shows this as "4m ago". */
   at: Date;
@@ -71,6 +102,8 @@ export interface Notif {
   planId?: string;
   /** Set on "request" rows — what the Accept and Ignore buttons act on. */
   request?: FriendRequest;
+  /** Set on "suggest" rows — what Accept and Decline act on, on a plan you host. */
+  suggestion?: { planId: string; entry: Suggestion };
 }
 
 /**
@@ -127,6 +160,8 @@ export interface StoredProfile {
   name: string; handle: string;
   /** Alert radius in miles, already clamped to the slider's range. */
   radius: number;
+  /** Availability, as last set on Profile. Falls back to "available". */
+  status: FriendStatus;
 }
 
 /** A searchable real-world place. Carries coordinates for distance math. */

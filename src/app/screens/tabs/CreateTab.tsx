@@ -7,8 +7,11 @@ import { DEFAULT_PLAN_EMOJI, PLAN_EMOJIS } from "../../data/activities";
 import { useCurrentUser } from "../../data/currentUser";
 import { useMyFriends } from "../../data/friends";
 import { useMyGroups } from "../../data/groups";
-import { getMyCoords, MIN_QUERY, PLACES_ENABLED, suggestPlaces } from "../../data/places";
-import { clockLabel, createPlan, CURRENT_LOCATION, planErrorMessage, startsAtFor, startsAtForClock } from "../../data/plans";
+import { describeCoords, getMyCoords, MIN_QUERY, PLACES_ENABLED, suggestPlaces } from "../../data/places";
+import {
+  clockLabel, createPlan, CURRENT_LOCATION, planErrorMessage, QUICK_TIMES,
+  startsAtFor, startsAtForClock,
+} from "../../data/plans";
 import type { ClockTime } from "../../data/plans";
 import type { Place } from "../../types";
 
@@ -99,13 +102,21 @@ export function CreateTab({ onCreated }: { onCreated: () => void }) {
             ? { lat: place.lat, lng: place.lng }
             : null;
 
+      // "Current Location" is a placeholder that only means anything to the
+      // person who chose it — to everyone it's shared with it names nowhere. So
+      // it's resolved to a real place here, once, and that's what's stored.
+      // Falls back to the placeholder if the lookup can't be made; a plan that
+      // reads vaguely beats a share that failed.
+      const resolved =
+        locMode === "current" && coords ? await describeCoords(coords) : null;
+
       await createPlan({
         title:    planTitle,
         emoji:    badge.emoji,
         color:    badge.color,
         timeLabel,
         startsAt: clock ? startsAtForClock(clock) : startsAtFor(time),
-        location: locationLabel,
+        location: resolved ?? locationLabel,
         group,
         flexTime,
         flexLoc,
@@ -163,7 +174,7 @@ export function CreateTab({ onCreated }: { onCreated: () => void }) {
     setPlaceError("");
   };
 
-  const times = ["⚡ Now", "In 30 min", "In 1 hr", "In 2 hrs", "Tonight", "Tomorrow"];
+  const times = QUICK_TIMES;
   /** Everyone, plus whatever groups you've actually made. */
   const groupChoices = ["Everyone", ...myGroups.map((g) => g.name)];
 

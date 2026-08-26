@@ -1,20 +1,33 @@
-// SUGGEST CHANGES CODE: `Pencil` iconed the "Suggest" button in the action row.
-import { MapPin } from "lucide-react";
+import { MapPin, Pencil } from "lucide-react";
 import { useState } from "react";
-// SUGGEST CHANGES CODE: `LAVENDER` tinted the "Suggest" button.
-import { CARD, DARK, MID, MINT, PEACH, WHITE } from "../../constants/colors";
+import { CARD, DARK, LAVENDER, MID, MINT, PEACH, WHITE } from "../../constants/colors";
 import { locationLine } from "../../data/plans";
 import type { Plan } from "../../types";
 import { AvatarBubble } from "../common/AvatarBubble";
 
+
+/**
+ * Marks a plan whose host is open to moving it. One tag for the whole plan,
+ * next to its name — which half is flexible is a detail for the sheet, and
+ * marking each one separately put two identical chips on the same card.
+ */
+function FlexChip() {
+  return (
+    <span className="text-xs font-extrabold px-1.5 py-0.5 rounded-md flex-shrink-0"
+      style={{ background: MINT + "22", color: "#3E9E6E", fontSize: 10 }}>
+      flexible
+    </span>
+  );
+}
+
 export function PlanCard({
-  plan, onTap, compact = false, onJoin, joined = false, pending = false,
+  plan, onTap, compact = false, onJoin, joined = false, pending = false, onSuggest,
 }: {
   plan: Plan;
   onTap?: () => void;
   compact?: boolean;
-  // SUGGEST CHANGES CODE: also took `onSuggest?: () => void`, for the button
-  // in the non-compact action row below.
+  /** Offered only on a plan its host marked flexible, and never on your own. */
+  onSuggest?: () => void;
   /** Given only for real plans — seeded ones have no document to RSVP against. */
   onJoin?: () => void;
   joined?: boolean;
@@ -46,9 +59,16 @@ export function PlanCard({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
-              <div>
-                <h3 className="font-extrabold text-sm leading-tight" style={{ color: DARK }}>{plan.activity}</h3>
-                <p className="text-xs mt-0.5" style={{ color: MID }}>by {plan.host} · {plan.group}</p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <h3 className="font-extrabold text-sm leading-tight truncate" style={{ color: DARK }}>{plan.activity}</h3>
+                  {(plan.flexTime || plan.flexLoc) && <FlexChip />}
+                </div>
+                {/* Who, but not which group they sent it to. The group is the
+                    host's own shorthand for a slice of their friends list, and
+                    naming it here would tell you how they've filed you. This
+                    card only ever shows a plan someone else hosts. */}
+                <p className="text-xs mt-0.5" style={{ color: MID }}>by {plan.host}</p>
               </div>
               <span className="text-xs font-extrabold px-2.5 py-1 rounded-full flex-shrink-0"
                 style={{ background: plan.accentColor + "22", color: tintText(plan.accentColor) }}>
@@ -79,13 +99,22 @@ export function PlanCard({
 
               {/* Compact cards keep the RSVP inline: Explore is a scanning list,
                   and a full button row per card would halve how many fit. */}
-              {compact && onJoin && (
-                <button onClick={(e) => { e.stopPropagation(); onJoin(); }} disabled={pending}
-                  className="ml-auto px-3.5 py-1.5 rounded-full text-xs font-extrabold transition-all flex-shrink-0"
-                  style={{ background: joined ? MINT : MINT + "20", color: joined ? WHITE : MINT, opacity: pending ? 0.6 : 1 }}>
-                  {joinLabel}
-                </button>
-              )}
+              <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+                {compact && onSuggest && (
+                  <button onClick={(e) => { e.stopPropagation(); onSuggest(); }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-extrabold transition-all"
+                    style={{ background: LAVENDER + "22", color: "#6D4FD8" }}>
+                    <Pencil size={10} /> Suggest
+                  </button>
+                )}
+                {compact && onJoin && (
+                  <button onClick={(e) => { e.stopPropagation(); onJoin(); }} disabled={pending}
+                    className="px-3.5 py-1.5 rounded-full text-xs font-extrabold transition-all"
+                    style={{ background: joined ? MINT : MINT + "20", color: joined ? WHITE : MINT, opacity: pending ? 0.6 : 1 }}>
+                    {joinLabel}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -97,20 +126,18 @@ export function PlanCard({
               style={{ background: joined ? MINT : MINT + "20", color: joined ? WHITE : MINT, opacity: pending ? 0.6 : 1 }}>
               {joinLabel}
             </button>
+            {onSuggest && (
+              <button onClick={(e) => { e.stopPropagation(); onSuggest(); }}
+                className="px-3 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-1"
+                style={{ background: LAVENDER + "18", color: "#6D4FD8" }}>
+                <Pencil size={11} /> Suggest
+              </button>
+            )}
             <button onClick={(e) => { e.stopPropagation(); setDismissed(true); }}
               className="px-3 py-2.5 rounded-2xl text-xs font-bold"
               style={{ background: CARD, color: MID }}>
               Next Time
             </button>
-            {/* SUGGEST CHANGES CODE: a third button sat here:
-
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onSuggest?.(); }}
-                    className="px-3 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-1"
-                    style={{ background: LAVENDER + "18", color: LAVENDER }}>
-                    <Pencil size={11} /> Suggest
-                  </button>
-            */}
           </div>
         )}
       </div>

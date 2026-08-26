@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import type { FriendRequest, Notif, Plan } from "../types";
 import { useCurrentUser } from "./currentUser";
 import { useFriendRequests } from "./friendRequests";
+import { locationLabel } from "./plans";
 import { usePlanFeed } from "./planFeed";
 
 /**
@@ -91,6 +92,16 @@ function markRead(ids: string[]): void {
 /** "Mia K." → "Mia". Notification copy reads better on first names alone. */
 const firstNameOf = (name: string) => name.trim().split(/\s+/)[0] || "Someone";
 
+/** "Mia" → "Mia's", "Chris" → "Chris'". */
+const possessive = (name: string) => (/s$/i.test(name) ? `${name}'` : `${name}'s`);
+
+/** The headline for each kind of edit a host can make. */
+const EDIT_HEADLINE = {
+  time:     "New time",
+  location: "New location",
+  both:     "New time and location",
+} as const;
+
 /** A short, human gap. Anything older than a week isn't in the feed anyway. */
 export function timeAgo(at: Date): string {
   const mins = Math.floor((Date.now() - at.getTime()) / 60000);
@@ -104,7 +115,7 @@ export function timeAgo(at: Date): string {
 
 /** "☕ Coffee Run · 3:00 PM · Blue Bottle" — the details, minus the headline. */
 const planLine = (plan: Plan) =>
-  [`${plan.emoji} ${plan.activity}`, plan.time, plan.location].filter(Boolean).join(" · ");
+  [`${plan.emoji} ${plan.activity}`, plan.time, locationLabel(plan)].filter(Boolean).join(" · ");
 
 /**
  * Turns the live lists into a newest-first feed: one row per friend request
@@ -157,6 +168,46 @@ export function buildNotifs(
       planId: plan.id,
       read:   false,
     });
+  }
+
+  // A plan its host has moved since sharing it. Keyed on `updatedAt`, so each
+  // edit is its own unread row and the last one doesn't get marked read by a
+  // receipt left over from the one before it. Held back until the server
+  // timestamp resolves — until then there's no stable id to key on.
+  for (const plan of friendPlans) {
+    if (!plan.lastEdit || !plan.updatedAt) continue;
+    out.push({
+      id:     `edit:${plan.id}:${plan.updatedAt.getTime()}`,
+      type:   "update",
+      title:  `${EDIT_HEADLINE[plan.lastEdit]} for ${possessive(firstNameOf(plan.host))} ${plan.activity} plan`,
+      // The new value is read off the plan rather than stored with the edit, so
+      // it's always the same string the card is showing.
+      body:   plan.lastEdit === "location" ? `Now meets at ${locationLabel(plan)}`
+            : plan.lastEdit === "time"     ? `Now starts ${plan.time}`
+            : `Now starts ${plan.time} at ${locationLabel(plan)}`,
+      at:     plan.updatedAt,
+      planId: plan.id,
+      read:   false,
+    });
+  }
+
+  // Changes friends have proposed on something you host. Read off the same
+  // snapshot that draws your Home tab — a suggestion needs no query of its own.
+  for (const plan of myPlans) {
+    if (!plan.hostUid || plan.hostUid !== myUid) continue;
+    for (const s of plan.suggestions ?? []) {
+      if (s.uid === myUid) continue;
+      out.push({
+        id:     `suggest:${plan.id}:${s.uid}:${s.at?.getTime() ?? 0}`,
+        type:   "suggest",
+        title:  `${firstNameOf(s.name)} suggested a ${s.kind === "time" ? "time" : "place"} change to ${plan.activity}`,
+        body:   `Suggestion: ${s.value} — your plan says ${s.kind === "time" ? plan.time : locationLabel(plan)}`,
+        at:     s.at ?? plan.updatedAt ?? new Date(),
+        planId: plan.id,
+        suggestion: { planId: plan.id, entry: s },
+        read:   false,
+      });
+    }
   }
 
   for (const plan of myPlans) {

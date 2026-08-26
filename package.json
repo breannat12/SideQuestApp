@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "deploy": "vite build && firebase deploy --only hosting"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

@@ -118,11 +118,30 @@ service cloud.firestore {
              );
       }
 
+      // Proposing a different time or place on a plan you were invited to.
+      //
+      // Same shape as the RSVP exception above: the caller must be someone the
+      // plan was addressed to, the write must touch nothing but `suggestions`,
+      // and within that map it must touch nothing but their own uid. That last
+      // check is what stops anyone editing, forging or deleting a suggestion
+      // that isn't theirs while still letting them write their own.
+      function isSuggestion() {
+        let uid = request.auth.uid;
+        return uid in resource.data.get('audienceUids', [])
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['suggestions'])
+          && request.resource.data.get('suggestions', {})
+               .diff(resource.data.get('suggestions', {})).affectedKeys()
+               .hasOnly([uid]);
+      }
+
       allow read:   if signedIn();
       allow create: if signedIn() && request.resource.data.hostUid == request.auth.uid;
       allow delete: if signedIn() && resource.data.hostUid == request.auth.uid;
       allow update: if signedIn()
-                    && (resource.data.hostUid == request.auth.uid || isRsvp());
+                    && (resource.data.hostUid == request.auth.uid
+                        || isRsvp()
+                        || isSuggestion());
     }
   }
 }

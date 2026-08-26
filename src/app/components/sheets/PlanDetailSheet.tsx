@@ -1,12 +1,15 @@
 import { Clock, MapPin, MessageCircle, Pencil, Share2, Users, X } from "lucide-react";
 import { CARD, CORAL, DANGER, DARK, LAVENDER, MID, MINT, SKY, WHITE } from "../../constants/colors";
+import { locationLabel } from "../../data/plans";
 import { usePlanFeed } from "../../data/planFeed";
 import type { Plan } from "../../types";
 import { AvatarBubble } from "../common/AvatarBubble";
 
-// SUGGEST CHANGES CODE: `onSuggest` opened the edit sheet for a plan you host
-// and the suggestion sheet for anyone else's. Edit-only now, hence the rename.
-export function PlanDetailSheet({ plan: opened, onClose, onEdit }: { plan: Plan; onClose: () => void; onEdit: () => void }) {
+export function PlanDetailSheet({ plan: opened, onClose, onEdit, onSuggest }: {
+  plan: Plan; onClose: () => void; onEdit: () => void;
+  /** Opens the suggestion sheet, on someone else's flexible plan. */
+  onSuggest?: () => void;
+}) {
   const { isJoined, latest, pendingId, toggleJoin, joinError } = usePlanFeed();
   // The sheet was handed a copy at tap time. Re-resolving keeps the roster and
   // the Join button honest while it's open — a friend joining shows up here.
@@ -18,6 +21,12 @@ export function PlanDetailSheet({ plan: opened, onClose, onEdit }: { plan: Plan;
   // everyone else on a plan with nobody running it. A plan called off while
   // this sheet was open isn't joinable by anyone.
   const canJoin = plan.host !== "You" && !plan.cancelled;
+  // This sheet opens over Explore and the notification drawer as well as Home,
+  // so the group line has to be earned rather than assumed.
+  const isHost  = plan.host === "You";
+  /** What the host left open to suggestions, if anything. */
+  const flexible = [plan.flexTime && "time", plan.flexLoc && "place"].filter(Boolean) as string[];
+  const canSuggest = !isHost && flexible.length > 0 && !plan.cancelled && Boolean(onSuggest);
 
   return (
     <div className="absolute inset-0 z-40 flex flex-col justify-end" style={{ background: "rgba(0,0,0,0.4)" }}>
@@ -30,7 +39,7 @@ export function PlanDetailSheet({ plan: opened, onClose, onEdit }: { plan: Plan;
             style={{ background: plan.accentColor + "18" }}>
             <div className="text-6xl mb-2">{plan.emoji}</div>
             <h2 className="text-xl font-extrabold" style={{ color: DARK }}>{plan.activity}</h2>
-            <p className="text-sm mt-1" style={{ color: MID }}>{plan.location}</p>
+            <p className="text-sm mt-1" style={{ color: MID }}>{locationLabel(plan)}</p>
           </div>
           <div className="px-5 pt-4 pb-8">
             <div className="grid grid-cols-3 gap-2 mb-5">
@@ -52,12 +61,37 @@ export function PlanDetailSheet({ plan: opened, onClose, onEdit }: { plan: Plan;
               <AvatarBubble i={plan.avatar} color={plan.avatarColor} size={40} />
               <div>
                 <p className="text-sm font-extrabold" style={{ color: DARK }}>{plan.host}</p>
-                <p className="text-xs" style={{ color: MID }}>Organizer · {plan.group}</p>
+                <p className="text-xs" style={{ color: MID }}>
+                  {isHost ? `Organizer · ${plan.group}` : "Organizer"}
+                </p>
               </div>
               <button className="ml-auto p-2 rounded-xl" style={{ background: SKY + "20" }}>
                 <MessageCircle size={15} style={{ color: SKY }} />
               </button>
             </div>
+            {/* Says which parts can move, and offers the way to move them.
+                Without the first half the button is an invitation with no
+                subject — "suggest a change" to what? */}
+            {canSuggest && (
+              <div className="flex items-center gap-3 mb-4 p-3 rounded-2xl"
+                style={{ background: MINT + "12", border: `1.5px solid ${MINT}35` }}>
+                <span className="text-base">🌀</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-extrabold" style={{ color: DARK }}>
+                    {flexible.join(" and ")} {flexible.length > 1 ? "are" : "is"} flexible
+                  </p>
+                  <p className="text-xs" style={{ color: MID }}>
+                    {plan.host} is open to another {flexible.join(" or ")}.
+                  </p>
+                </div>
+                <button onClick={onSuggest}
+                  className="px-3 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1 flex-shrink-0"
+                  style={{ background: LAVENDER + "25", color: "#6D4FD8" }}>
+                  <Pencil size={11} /> Suggest
+                </button>
+              </div>
+            )}
+
             {plan.description && (
               <p className="text-sm mb-4 leading-relaxed" style={{ color: MID }}>"{plan.description}"</p>
             )}
@@ -94,11 +128,8 @@ export function PlanDetailSheet({ plan: opened, onClose, onEdit }: { plan: Plan;
                 }}>
                 {pending ? "…" : joined ? (canJoin ? "✓ You're In! · Tap to leave" : "✓ You're hosting") : "Join Plan"}
               </button>
-              {/* SUGGEST CHANGES CODE: this button showed for everyone, reading
-                  "Edit" on your own plan and "Suggest" on someone else's. It's
-                  the host's alone now — restore by dropping the guard and
-                  putting the label back to:
-                    {plan.host === "You" ? "Edit" : "Suggest"} */}
+              {/* Edit is the host's. Everyone else gets the Suggest button in
+                  the flexible panel above, when the host left one open. */}
               {plan.host === "You" && (
                 <button onClick={onEdit}
                   className="px-4 py-3.5 rounded-2xl font-extrabold text-sm flex items-center gap-1.5"
