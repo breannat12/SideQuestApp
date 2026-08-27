@@ -9,6 +9,7 @@ import { BG, CORAL, DARK, LAVENDER, MID, SKY, WHITE } from "./constants/colors";
 import { CurrentUserProvider, useCurrentUser } from "./data/currentUser";
 import { FriendRequestProvider } from "./data/friendRequests";
 import { useNotifs } from "./data/notifs";
+import { PingProvider } from "./data/pings";
 import { PlanFeedProvider } from "./data/planFeed";
 import { CreateProfileScreen } from "./screens/CreateProfileScreen";
 import { LoginScreen } from "./screens/LoginScreen";
@@ -38,9 +39,11 @@ export default function App() {
       {/* Inside the user provider: these queries are per-account, and can't
           subscribe until Firebase has said whose session this is. */}
       <FriendRequestProvider>
-        <PlanFeedProvider>
-          <AppShell />
-        </PlanFeedProvider>
+        <PingProvider>
+          <PlanFeedProvider>
+            <AppShell />
+          </PlanFeedProvider>
+        </PingProvider>
       </FriendRequestProvider>
     </CurrentUserProvider>
   );
@@ -240,10 +243,9 @@ function AppShell() {
 function SplashScreen() {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ background: BG }}>
-      <div className="w-24 h-24 rounded-[2rem] flex items-center justify-center"
-        style={{ background: `linear-gradient(135deg, ${SKY}, ${LAVENDER})`, boxShadow: `0 12px 32px ${SKY}50` }}>
-        <span className="text-4xl">🤙</span>
-      </div>
+      <img src="/icons/icon-192.png" alt="" width={96} height={96}
+        className="w-24 h-24 rounded-[2rem]"
+        style={{ boxShadow: `0 12px 32px ${SKY}50` }} />
       <h1 className="text-2xl font-extrabold mt-5" style={{ color: DARK, letterSpacing: "-0.03em" }}>
         sidequest
       </h1>

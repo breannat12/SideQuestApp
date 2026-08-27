@@ -13,11 +13,11 @@ export function WelcomeScreen({ onSignUp, onLogIn }: { onSignUp: () => void; onL
         style={{ background: `radial-gradient(circle, ${LAVENDER}60 0%, transparent 70%)`, transform: "translate(-40%, 0)" }} />
 
       <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
-        {/* Logo mark */}
-        <div className="w-24 h-24 rounded-[2rem] flex items-center justify-center mb-6 shadow-lg"
-          style={{ background: `linear-gradient(135deg, ${SKY}, ${LAVENDER})`, boxShadow: `0 12px 32px ${SKY}50` }}>
-          <span className="text-4xl">🤙</span>
-        </div>
+        {/* Logo mark — the installed app icon itself, so the two can't drift
+            apart. It carries its own gradient, hence no background here. */}
+        <img src="/icons/icon-192.png" alt="" width={96} height={96}
+          className="w-24 h-24 rounded-[2rem] mb-6 shadow-lg"
+          style={{ boxShadow: `0 12px 32px ${SKY}50` }} />
 
         <h1 className="text-4xl font-extrabold mb-2" style={{ color: DARK, letterSpacing: "-0.03em" }}>sidequest</h1>
         <p className="text-base font-bold mb-2" style={{ color: MID }}>spontaneous hangouts, made easy.</p>

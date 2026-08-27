@@ -6,8 +6,9 @@ import { useCurrentUser } from "../../data/currentUser";
 import { signOutUser } from "../../data/users";
 
 export function ProfileTab({ onSignedOut }: { onSignedOut: () => void }) {
-  const { name, handle, initials } = useCurrentUser();
-  const [status, setStatus]         = useState<"available" | "busy" | "dnd">("available");
+  // Availability comes from the user context, not local state: it's persisted
+  // on the profile row, so holding a copy here would reset it on every visit.
+  const { name, handle, initials, availability: status, setAvailability: setStatus } = useCurrentUser();
   const [notifs, setNotifs]         = useState(true);
   const [ghost, setGhost]           = useState(false);
   const [planNotifs, setPlanNotifs] = useState(true);

@@ -61,7 +61,7 @@ export const STATUS_DEFAULT: FriendStatus = "available";
 const STATUSES: FriendStatus[] = ["available", "busy", "dnd"];
 
 /** Anything unrecognised — an older row, a hand-edited one — reads as available. */
-const readStatus = (value: unknown): FriendStatus =>
+export const readStatus = (value: unknown): FriendStatus =>
   STATUSES.includes(value as FriendStatus) ? (value as FriendStatus) : STATUS_DEFAULT;
 
 /** Merged onto the profile row, same as the radius above. */

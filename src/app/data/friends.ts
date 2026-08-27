@@ -1,9 +1,10 @@
-import { collection, onSnapshot } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { collection, documentId, onSnapshot, query, where } from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
 import { CORAL, LAVENDER, MINT, PEACH, SKY } from "../constants/colors";
-import type { Friend } from "../types";
+import type { Friend, FriendStatus } from "../types";
 import { useCurrentUser } from "./currentUser";
 import { auth, db } from "./firebase";
+import { STATUS_DEFAULT, readStatus } from "./users";
 
 // COINCIDENCE FEATURE -- seed data for the nearby-and-free alerts on Home.
 // Restore alongside the CoincidenceAlert type and CoincidenceSection.
@@ -100,3 +101,92 @@ export function useMyFriends() {
 
   return { friends, loading, error };
 }
+
+// ── Who's free right now ───────────────────────────────────────────────────
+//
+// Availability lives on `users/{uid}`, not on the friend row. It has to: the
+// friend document is written once, when the friendship is accepted, and neither
+// party may write to the other's copy afterwards — so a cached status there
+// would freeze at whatever it was the day you met.
+//
+// Reading it back is allowed because `users/{uid}` is readable by any signed-in
+// user, which is the same permission the handle search runs on.
+
+/**
+ * Firestore's ceiling for an `in` filter. Friend lists longer than this are
+ * split across several subscriptions, one per chunk.
+ */
+const STATUS_CHUNK = 30;
+
+const chunk = <T,>(items: T[], size: number): T[][] => {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+};
+
+/**
+ * Live availability for a set of uids, as `{ uid: status }`.
+ *
+ * One query per chunk of 30 rather than one listener per friend: a 25-friend
+ * list is a single subscription this way and 25 of them the other. Each chunk
+ * owns its own map and they're merged on every snapshot, the same way the two
+ * plan queries are — so a slow chunk can't blank out the rows another already
+ * reported.
+ */
+export function watchFriendStatuses(
+  uids: string[],
+  onStatuses: (statuses: Record<string, FriendStatus>) => void,
+  onError: (err: unknown) => void,
+): () => void {
+  if (uids.length === 0) {
+    onStatuses({});
+    return () => {};
+  }
+
+  const chunks = chunk(uids, STATUS_CHUNK);
+  const perChunk: Record<string, FriendStatus>[] = chunks.map(() => ({}));
+
+  const publish = () => onStatuses(Object.assign({}, ...perChunk));
+
+  const unsubs = chunks.map((ids, i) =>
+    onSnapshot(
+      query(collection(db, "users"), where(documentId(), "in", ids)),
+      (snap) => {
+        const next: Record<string, FriendStatus> = {};
+        for (const d of snap.docs) next[d.id] = readStatus(d.data().status);
+        perChunk[i] = next;
+        publish();
+      },
+      onError,
+    ),
+  );
+
+  return () => { for (const stop of unsubs) stop(); };
+}
+
+/**
+ * The subscription above, keyed on the friend list it was given. A friend who
+ * has never set a status — or whose row failed to load — reads as available,
+ * which is the same default their own Profile tab shows them.
+ */
+export function useFriendStatuses(friends: Friend[]): Record<string, FriendStatus> {
+  const [statuses, setStatuses] = useState<Record<string, FriendStatus>>({});
+
+  // Friends arrive as a fresh array on every snapshot, so the effect keys off
+  // the uids themselves — otherwise it would tear down and rebuild every
+  // listener each time an unrelated field on any friend changed.
+  const key = useMemo(() => friends.map((f) => f.uid).sort().join(","), [friends]);
+
+  useEffect(() => {
+    const uids = key ? key.split(",") : [];
+    return watchFriendStatuses(uids, setStatuses, () => setStatuses({}));
+  }, [key]);
+
+  return statuses;
+}
+
+/** Availability for one friend, defaulting the same way the profile row does. */
+export const statusOf = (
+  statuses: Record<string, FriendStatus>,
+  uid: string,
+): FriendStatus => statuses[uid] ?? STATUS_DEFAULT;

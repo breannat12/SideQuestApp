@@ -23,8 +23,12 @@
       <!-- `default` keeps the status bar dark-on-light, which suits the pale
            background; `black-translucent` would hide it behind the header. -->
       <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-      <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-      <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+      <!-- ?v= is a cache buster. Browsers cache favicons in a store of their
+           own that a normal reload doesn't touch, so changing the artwork at
+           the same URL leaves the old icon on the tab indefinitely. Bump this
+           whenever the icons change. -->
+      <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2" />
+      <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=2" />
 
       <!-- Nunito itself is requested by src/styles/fonts.css. That @import sits
            inside bundled CSS, so the browser only discovers the font host after

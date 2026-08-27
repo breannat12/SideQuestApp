@@ -88,6 +88,44 @@ service cloud.firestore {
       allow delete: if isParty();
     }
 
+    // Pings, at `pings/{fromUid}_{toUid}`. Same shape as a friend request: the
+    // id is derived from the pair, so pinging twice overwrites rather than
+    // stacking, and nobody can forge one that looks like it came from someone
+    // else.
+    //
+    // Unlike a request there is nothing to accept, so there is no second write
+    // to authorize — the recipient only ever reads it. `update` is allowed here
+    // where it isn't for a request, because re-pinging the same person lands on
+    // the document that's already there; it's pinned to the sender so it can
+    // only ever refresh your own ping.
+    match /pings/{pingId} {
+
+      function isParty() {
+        return signedIn()
+               && (resource.data.fromUid == request.auth.uid
+                   || resource.data.toUid == request.auth.uid);
+      }
+
+      // The recipient, to show it as a notification; the sender, so a ping they
+      // sent isn't invisible to them.
+      allow read: if isParty();
+
+      allow create: if signedIn()
+                    && request.resource.data.fromUid == request.auth.uid
+                    && request.resource.data.toUid != request.auth.uid
+                    && pingId == request.auth.uid + '_' + request.resource.data.toUid;
+
+      // Nudging again. The sender stays the sender and the recipient stays the
+      // recipient — all that may move is the timestamp.
+      allow update: if signedIn()
+                    && resource.data.fromUid == request.auth.uid
+                    && request.resource.data.fromUid == resource.data.fromUid
+                    && request.resource.data.toUid == resource.data.toUid;
+
+      // The sender taking it back, or the recipient clearing it.
+      allow delete: if isParty();
+    }
+
     // Plans. Readable by any signed-in user: a plan carries the uids of the
     // friends it was sent to, and each of them queries for their own.
     //

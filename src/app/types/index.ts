@@ -150,6 +150,23 @@ export interface Friend {
   avatar: string; color: string;
 }
 
+/**
+ * A nudge, from `pings/{fromUid}_{toUid}`.
+ *
+ * Same shape of idea as a friend request: the id is derived from the pair, so
+ * pinging twice overwrites rather than stacking, and the document existing is
+ * the whole of the state. Unlike a request there is nothing to accept — it
+ * shows up in the recipient's feed and ages out on its own.
+ */
+export interface Ping {
+  /** Always `{fromUid}_{toUid}`. */
+  id: string;
+  fromUid: string; fromName: string; fromUsername: string;
+  toUid: string;
+  /** Absent for the instant between a local write and the server's reply. */
+  createdAt?: Date;
+}
+
 /** A real signed-up person, as stored in the `users` collection. */
 export interface DirectoryUser {
   uid: string; username: string; name: string;

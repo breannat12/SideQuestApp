@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
-import type { FriendRequest, Notif, Plan } from "../types";
+import type { FriendRequest, Notif, Ping, Plan } from "../types";
 import { useCurrentUser } from "./currentUser";
 import { useFriendRequests } from "./friendRequests";
+import { usePings } from "./pings";
 import { locationLabel } from "./plans";
 import { usePlanFeed } from "./planFeed";
 
 /**
  * Notifications aren't stored. They're derived from the queries the app already
- * runs — plans and friend requests — which is why a friend sharing a plan lights
+ * runs — plans, friend requests and pings — which is why a friend sharing a plan lights
  * up your bell within the same snapshot that puts it on your Explore tab.
  *
  * The alternative — a `notifications` document written per recipient — needs a
@@ -127,6 +128,7 @@ export function buildNotifs(
   friendPlans: Plan[],
   cancelledPlans: Plan[],
   requests: FriendRequest[],
+  pings: Ping[],
   myUid: string,
 ): Notif[] {
   const out: Notif[] = [];
@@ -153,6 +155,24 @@ export function buildNotifs(
       at:      request.createdAt ?? new Date(),
       request,
       read:    false,
+    });
+  }
+
+  // Someone nudging you. Keyed on when it was sent rather than on the pair,
+  // because pinging twice overwrites the one document — and with a `ping:{uid}`
+  // id the second nudge would arrive already marked read by the receipt left
+  // over from the first. Held back until the timestamp resolves, since there's
+  // no stable id to key on before then.
+  for (const p of pings) {
+    if (!p.createdAt) continue;
+    const who = p.fromName || (p.fromUsername ? `@${p.fromUsername}` : "Someone");
+    out.push({
+      id:    `ping:${p.fromUid}:${p.createdAt.getTime()}`,
+      type:  "ping",
+      title: `${firstNameOf(who)} pinged you!`,
+      body:  "Plan a sidequest!",
+      at:    p.createdAt,
+      read:  false,
     });
   }
 
@@ -243,13 +263,14 @@ export function useNotifs() {
   const { uid } = useCurrentUser();
   const { myPlans, friendPlans, cancelledPlans } = usePlanFeed();
   const { incoming } = useFriendRequests();
+  const { incoming: pings } = usePings();
   const read = useSyncExternalStore(subscribeToReads, readSnapshot);
 
   useEffect(() => { loadReadFor(uid); }, [uid]);
 
   const notifs = useMemo(
-    () => buildNotifs(myPlans, friendPlans, cancelledPlans, incoming, uid).map((n) => ({ ...n, read: read.has(n.id) })),
-    [myPlans, friendPlans, cancelledPlans, incoming, uid, read],
+    () => buildNotifs(myPlans, friendPlans, cancelledPlans, incoming, pings, uid).map((n) => ({ ...n, read: read.has(n.id) })),
+    [myPlans, friendPlans, cancelledPlans, incoming, pings, uid, read],
   );
 
   const unread = notifs.reduce((count, n) => count + (n.read ? 0 : 1), 0);

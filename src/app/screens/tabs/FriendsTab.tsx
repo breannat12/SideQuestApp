@@ -1,22 +1,27 @@
-import { Pencil, Plus, UserPlus, Users } from "lucide-react";
-import { useState } from "react";
+import { ChevronDown, Pencil, Plus, UserPlus, Users } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { AvatarBubble } from "../../components/common/AvatarBubble";
 import { Divider } from "../../components/common/Divider";
 import { BG, CARD, CORAL, DARK, LIGHT, MID, MINT, SKY, WHITE } from "../../constants/colors";
-import { useMyFriends } from "../../data/friends";
+import { statusOf, useFriendStatuses, useMyFriends } from "../../data/friends";
 import { useMyGroups } from "../../data/groups";
-import type { Group } from "../../types";
+import { usePings } from "../../data/pings";
+import type { Friend, Group } from "../../types";
 import { GroupEditorPage } from "../GroupEditorPage";
 import { InvitePage } from "../InvitePage";
 
 export function FriendsTab() {
   const { friends, loading: loadingFriends, error: friendsError } = useMyFriends();
   const { groups, error: groupsError } = useMyGroups();
+  const statuses = useFriendStatuses(friends);
+  const { ping, sentUids, pendingUid, error: pingError } = usePings();
 
   const [activeId, setActiveId]   = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   /** A Group edits it, "new" creates one, null means neither is open. */
   const [editing, setEditing]     = useState<Group | "new" | null>(null);
+  /** All Friends starts collapsed to a stack of faces; this opens it. */
+  const [allOpen, setAllOpen]     = useState(false);
 
   // A group deleted on another device shouldn't leave the list filtered by it.
   const activeGroup = groups.find((g) => g.id === activeId) ?? null;
@@ -24,6 +29,15 @@ export function FriendsTab() {
   const visible = activeGroup
     ? friends.filter((f) => activeGroup.memberUids.includes(f.uid))
     : friends;
+
+  // The spotlight section, drawn from whatever the group filter has already
+  // narrowed things to — filtering by a group and then seeing someone outside
+  // it up top would read as a bug.
+  const freeNow = visible.filter((f) => statusOf(statuses, f.uid) === "available");
+
+  // Filtering to a group is a request to see who's in it, so the list opens
+  // itself and the collapsed control steps out of the way.
+  const showAll = allOpen || Boolean(activeGroup);
 
   // Full-panel replacements, same as Invite
   if (inviteOpen) return <InvitePage onBack={() => setInviteOpen(false)} />;
@@ -106,22 +120,6 @@ export function FriendsTab() {
         )}
       </div>
 
-      {/* Section divider — carries the edit affordance for the active group */}
-      <div className="px-5 mb-3 flex-shrink-0">
-        <Divider label={activeGroup
-          ? `${activeGroup.name} · ${visible.length} of ${activeGroup.memberUids.length}`
-          : `All Friends · ${friends.length}`} />
-        {activeGroup && (
-          <div className="flex justify-end mt-1.5">
-            <button onClick={() => setEditing(activeGroup)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-extrabold"
-              style={{ background: activeGroup.color + "20", color: activeGroup.color }}>
-              <Pencil size={11} /> Edit group
-            </button>
-          </div>
-        )}
-      </div>
-
       {/* Friends list */}
       <div className="flex-1 overflow-y-auto px-5 pb-4" style={{ scrollbarWidth: "none" }}>
         {friendsError && (
@@ -160,33 +158,135 @@ export function FriendsTab() {
           </div>
         )}
 
-        {visible.map((f) => {
-          // Chips for every group this person is in — the reverse of the filter.
-          const memberOf = groups.filter((g) => g.memberUids.includes(f.uid));
-          return (
-            <div key={f.uid} className="flex items-center gap-3 p-3 rounded-2xl mb-2"
-              style={{ background: WHITE, border: "1px solid rgba(0,0,0,0.06)" }}>
-              <AvatarBubble i={f.avatar} color={f.color} size={44} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-extrabold" style={{ color: DARK }}>{f.name}</p>
-                {f.username && <p className="text-xs truncate" style={{ color: MID }}>@{f.username}</p>}
-                {memberOf.length > 0 && (
-                  <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                    {memberOf.map((g) => (
-                      <span key={g.id} className="text-xs px-1.5 py-0.5 rounded-md font-bold"
-                        style={{ background: g.color + "20", color: g.color }}>
-                        {g.emoji} {g.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <button className="text-xs font-extrabold px-2.5 py-1 rounded-xl flex-shrink-0"
-                style={{ background: MINT + "20", color: MINT }}>Ping! 👋</button>
-            </div>
-          );
-        })}
+        {/* Free now — the spotlight. Only these rows carry a Ping button: a
+            nudge is an invitation to do something in the next hour, and sending
+            one to somebody who has marked themselves busy is just noise. */}
+        {freeNow.length > 0 && (
+          <>
+            <Divider label={`Free now · ${freeNow.length}`} />
+            {pingError && (
+              <p className="text-xs font-bold px-1 py-1.5" style={{ color: CORAL }}>{pingError}</p>
+            )}
+            {freeNow.map((f) => (
+              <FriendRow key={`free-${f.uid}`} friend={f} groups={groups}
+                action={
+                  <button onClick={() => ping(f)} disabled={Boolean(pendingUid)}
+                    className="text-xs font-extrabold px-2.5 py-1 rounded-xl flex-shrink-0 transition-all"
+                    style={{
+                      background: sentUids.includes(f.uid) ? LIGHT + "20" : MINT + "20",
+                      color:      sentUids.includes(f.uid) ? MID : MINT,
+                      opacity:    pendingUid && pendingUid !== f.uid ? 0.5 : 1,
+                    }}>
+                    {pendingUid === f.uid ? "Pinging…"
+                      : sentUids.includes(f.uid) ? "Pinged ✓"
+                      : "Ping! 👋"}
+                  </button>
+                } />
+            ))}
+            <div className="h-3" />
+          </>
+        )}
+
+        {/* Everyone, free or not. Kept whole rather than showing the remainder,
+            so this stays the one place to find any friend. */}
+        <Divider label={activeGroup
+          ? `${activeGroup.name} · ${visible.length} of ${activeGroup.memberUids.length}`
+          : `All Friends · ${friends.length}`} />
+        {activeGroup && (
+          <div className="flex justify-end mt-1.5 mb-1">
+            <button onClick={() => setEditing(activeGroup)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-extrabold"
+              style={{ background: activeGroup.color + "20", color: activeGroup.color }}>
+              <Pencil size={11} /> Edit group
+            </button>
+          </div>
+        )}
+
+        {/* Collapsed by default: the whole roster as a stack of faces. Free
+            now is the part worth acting on, and a second full list under it
+            pushed everything off the screen. */}
+        {!activeGroup && friends.length > 0 && (
+          <button onClick={() => setAllOpen((open) => !open)}
+            className="w-full flex items-center gap-3 p-3 rounded-2xl mb-2"
+            style={{ background: WHITE, border: "1px solid rgba(0,0,0,0.06)" }}>
+            <AvatarStack friends={visible} />
+            {/* No count here — the divider directly above already carries it. */}
+            <p className="flex-1 text-left text-sm font-extrabold" style={{ color: DARK }}>
+              {showAll ? "Show less" : "Show all"}
+            </p>
+            <ChevronDown size={16} strokeWidth={3} className="flex-shrink-0"
+              style={{ color: MID, transform: showAll ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+          </button>
+        )}
+
+        {showAll && visible.map((f) => (
+          <FriendRow key={f.uid} friend={f} groups={groups} />
+        ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The overlapping faces on the collapsed row, in the same style as the social
+ * proof on the welcome screen. Hand-rolled rather than `AvatarBubble` because
+ * these need a ring in the card colour to read as separate at this overlap.
+ */
+const STACK_FACES = 5;
+
+function AvatarStack({ friends }: { friends: Friend[] }) {
+  const shown = friends.slice(0, STACK_FACES);
+  const extra = friends.length - shown.length;
+  return (
+    <div className="flex -space-x-2 flex-shrink-0">
+      {shown.map((f) => (
+        <div key={f.uid}
+          className="w-9 h-9 rounded-full border-2 flex items-center justify-center text-xs font-extrabold text-white select-none"
+          style={{ background: f.color, borderColor: WHITE }}>
+          {f.avatar}
+        </div>
+      ))}
+      {extra > 0 && (
+        <div className="w-9 h-9 rounded-full border-2 flex items-center justify-center text-xs font-extrabold select-none"
+          style={{ background: BG, borderColor: WHITE, color: MID }}>
+          +{extra}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One friend. Extracted because both sections draw the same row and differ only
+ * in what sits on the right — a Ping button in Free now, nothing below, where
+ * repeating everyone's availability said nothing the section headings didn't.
+ */
+function FriendRow({ friend, groups, action }: {
+  friend: Friend;
+  groups: Group[];
+  action?: ReactNode;
+}) {
+  // Chips for every group this person is in — the reverse of the filter.
+  const memberOf = groups.filter((g) => g.memberUids.includes(friend.uid));
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-2xl mb-2"
+      style={{ background: WHITE, border: "1px solid rgba(0,0,0,0.06)" }}>
+      <AvatarBubble i={friend.avatar} color={friend.color} size={44} />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-extrabold" style={{ color: DARK }}>{friend.name}</p>
+        {friend.username && <p className="text-xs truncate" style={{ color: MID }}>@{friend.username}</p>}
+        {memberOf.length > 0 && (
+          <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+            {memberOf.map((g) => (
+              <span key={g.id} className="text-xs px-1.5 py-0.5 rounded-md font-bold"
+                style={{ background: g.color + "20", color: g.color }}>
+                {g.emoji} {g.name}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      {action}
     </div>
   );
 }
