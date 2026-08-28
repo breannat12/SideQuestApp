@@ -1,4 +1,4 @@
-import { Pencil, Plus, UserPlus, Users } from "lucide-react";
+import { ChevronDown, Pencil, Plus, UserPlus, Users } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { AvatarBubble } from "../../components/common/AvatarBubble";
 import { Divider } from "../../components/common/Divider";
@@ -20,6 +20,9 @@ export function FriendsTab() {
   const [inviteOpen, setInviteOpen] = useState(false);
   /** A Group edits it, "new" creates one, null means neither is open. */
   const [editing, setEditing]     = useState<Group | "new" | null>(null);
+  /** Open by default — the roster is the point of the tab. The chevron on the
+      bar folds it away for anyone who only came for Free now. */
+  const [allOpen, setAllOpen]     = useState(true);
 
   // A group deleted on another device shouldn't leave the list filtered by it.
   const activeGroup = groups.find((g) => g.id === activeId) ?? null;
@@ -182,10 +185,28 @@ export function FriendsTab() {
         )}
 
         {/* Everyone, free or not. Kept whole rather than showing the remainder,
-            so this stays the one place to find any friend. */}
-        <Divider label={activeGroup
-          ? `${activeGroup.name} · ${visible.length} of ${activeGroup.memberUids.length}`
-          : `All Friends · ${friends.length}`} />
+            so this stays the one place to find any friend.
+
+            The same `Divider` Free now uses, so the two headings match, with
+            the chevron closing the row off at the right. Wrapped in a button
+            rather than sat beside one: the whole heading is the tap target.
+
+            "of N" only when a group holds someone who isn't a friend any more —
+            otherwise the two numbers are the same and saying both reads as a
+            discrepancy. */}
+        <button onClick={() => setAllOpen((open) => !open)}
+          aria-expanded={allOpen}
+          className="w-full flex items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <Divider label={activeGroup
+              ? (visible.length === activeGroup.memberUids.length
+                  ? `${activeGroup.name} · ${visible.length}`
+                  : `${activeGroup.name} · ${visible.length} of ${activeGroup.memberUids.length}`)
+              : `All Friends · ${friends.length}`} />
+          </div>
+          <ChevronDown size={16} strokeWidth={3} className="flex-shrink-0"
+            style={{ color: MID, transform: allOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+        </button>
         {activeGroup && (
           <div className="flex justify-end mt-1.5 mb-1">
             <button onClick={() => setEditing(activeGroup)}
@@ -196,10 +217,52 @@ export function FriendsTab() {
           </div>
         )}
 
-        {visible.map((f) => (
+        {/* Folded: the roster as a row of faces. The same white card as the
+            rows it stands in for, and the whole thing is the way back. */}
+        {!allOpen && visible.length > 0 && (
+          <button onClick={() => setAllOpen(true)}
+            className="w-full flex items-center gap-3 p-3 rounded-2xl mb-2"
+            style={{ background: WHITE, border: "1px solid rgba(0,0,0,0.06)" }}>
+            <AvatarStack friends={visible} />
+            <div className="flex-1" />
+            <span className="text-xs font-bold flex-shrink-0" style={{ color: MID }}>tap to expand</span>
+          </button>
+        )}
+
+        {allOpen && visible.map((f) => (
           <FriendRow key={f.uid} friend={f} groups={groups} />
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The overlapping faces on the folded bar. Hand-rolled rather than
+ * `AvatarBubble` because these need a ring in the card's own white to read as
+ * separate at this overlap. Full-strength fills, not tints — a face at partial
+ * opacity reads as disabled.
+ */
+const STACK_FACES = 5;
+
+function AvatarStack({ friends }: { friends: Friend[] }) {
+  const shown = friends.slice(0, STACK_FACES);
+  const extra = friends.length - shown.length;
+  return (
+    <div className="flex -space-x-2 flex-shrink-0">
+      {shown.map((f) => (
+        <div key={f.uid}
+          className="w-9 h-9 rounded-full border-2 flex items-center justify-center text-xs font-extrabold text-white select-none"
+          style={{ background: f.color, borderColor: WHITE }}>
+          {f.avatar}
+        </div>
+      ))}
+      {extra > 0 && (
+        <div className="w-9 h-9 rounded-full border-2 flex items-center justify-center text-xs font-extrabold select-none"
+          style={{ background: CARD, borderColor: WHITE, color: MID }}>
+          +{extra}
+        </div>
+      )}
     </div>
   );
 }
