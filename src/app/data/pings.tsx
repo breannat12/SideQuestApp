@@ -98,6 +98,37 @@ export async function cancelPing(toUid: string): Promise<void> {
   await deleteDoc(doc(db, "pings", pingId(user.uid, toUid)));
 }
 
+// ── Errors ─────────────────────────────────────────────────────────────────
+
+/**
+ * Turns a Firestore error code into something worth showing — and, for the one
+ * failure that isn't the user's fault or the network's, something worth acting
+ * on. `permission-denied` on a ping means the rules in `firestore.rules` aren't
+ * the rules the project is running — a newly added collection stays denied
+ * until they're released. `npm run deploy` carries them along with hosting;
+ * `npm run deploy:rules` pushes them on their own.
+ */
+export function pingErrorMessage(err: unknown): string {
+  const code =
+    err && typeof err === "object" && "code" in err
+      ? String((err as { code: unknown }).code)
+      : err instanceof Error
+        ? err.message
+        : "";
+
+  switch (code) {
+    case "permission-denied":
+      return "Ping blocked by Firestore rules. Deploy them: firebase deploy --only firestore:rules";
+    case "unavailable":
+    case "auth/network-request-failed":
+      return "You're offline. Try that ping again in a moment.";
+    case "not-signed-in":
+      return "You're signed out. Sign in again to ping.";
+    default:
+      return "Couldn't send that ping. Try again.";
+  }
+}
+
 // ── Live view ──────────────────────────────────────────────────────────────
 
 function watchPings(
@@ -189,8 +220,8 @@ export function PingProvider({ children }: { children: ReactNode }) {
         timers.delete(friend.uid);
         setSentUids((prev) => prev.filter((uid) => uid !== friend.uid));
       }, PING_SENT_MS));
-    } catch {
-      setError("Couldn't send that ping. Try again.");
+    } catch (err) {
+      setError(pingErrorMessage(err));
     } finally {
       setPendingUid("");
     }

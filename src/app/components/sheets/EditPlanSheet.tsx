@@ -133,7 +133,7 @@ export function EditPlanSheet({ plan, onClose }: { plan: Plan; onClose: () => vo
           style={{ background: WHITE }}>
           <div className="w-20 h-20 rounded-3xl flex items-center justify-center text-4xl"
             style={{ background: MINT + "20" }}>✅</div>
-          <h3 className="text-lg font-extrabold text-center" style={{ color: DARK }}>Plan Updated!</h3>
+          <h3 className="text-lg font-extrabold text-center" style={{ color: DARK }}>Sidequest Updated!</h3>
           <p className="text-sm text-center leading-relaxed" style={{ color: MID }}>
             {tab === "time"
               ? `${plan.activity} now starts ${timeLabel}.`
@@ -169,7 +169,7 @@ export function EditPlanSheet({ plan, onClose }: { plan: Plan; onClose: () => vo
         {/* Header */}
         <div className="px-5 pb-3 flex items-start justify-between" style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
           <div>
-            <h3 className="text-lg font-extrabold" style={{ color: DARK }}>Edit Plan</h3>
+            <h3 className="text-lg font-extrabold" style={{ color: DARK }}>Edit</h3>
             <p className="text-xs mt-0.5" style={{ color: MID }}>
               <span className="font-extrabold" style={{ color: DARK }}>{plan.emoji} {plan.activity}</span> · yours
             </p>

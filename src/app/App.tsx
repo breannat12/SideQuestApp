@@ -203,17 +203,24 @@ function AppShell() {
           )}
         </div>
 
-        {/* Bottom nav */}
-        <div className="flex items-end px-3 pb-6 pt-2 flex-shrink-0"
+        {/* Bottom nav. `items-stretch` gives all five the same height, so Create
+            — which has no label under it — can centre itself in that height
+            rather than hanging off the bottom edge with the labels. */}
+        <div className="flex items-stretch px-3 pb-6 pt-2 flex-shrink-0"
           style={{ background: BG, borderTop: "1px solid rgba(110,198,255,0.25)" }}>
           {NAV.map(({ id, label, icon: Icon }) => {
             const active   = tab === id;
             const isCreate = id === "create";
             return (
               <button key={id} onClick={() => setTab(id)}
-                className="flex-1 flex flex-col items-center gap-0.5 transition-all select-none">
+                className={`flex-1 flex flex-col items-center gap-0.5 transition-all select-none ${
+                  isCreate ? "justify-center" : "justify-end"
+                }`}>
                 {isCreate ? (
-                  <div className="w-14 h-14 -mt-5 rounded-2xl flex items-center justify-center shadow-lg"
+                  // No lift: it sits level with the other five, and the shadow
+                  // is what raises it. Any vertical offset here fights the
+                  // `justify-center` above and pulls it off the row again.
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg"
                     style={{ background: `linear-gradient(135deg, ${SKY}, ${LAVENDER})`, boxShadow: `0 8px 20px ${SKY}60` }}>
                     <Icon size={24} color={WHITE} />
                   </div>

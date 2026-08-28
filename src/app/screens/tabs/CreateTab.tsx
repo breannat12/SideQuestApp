@@ -195,14 +195,14 @@ export function CreateTab({ onCreated }: { onCreated: () => void }) {
           style={{ background: badge.color + "22" }}>
           {badge.emoji}
         </div>
-        <h2 className="text-2xl font-extrabold mb-2" style={{ color: DARK }}>Plan Shared! 🚀</h2>
+        <h2 className="text-2xl font-extrabold mb-2" style={{ color: DARK }}>Sidequest Shared! 🚀</h2>
         {/* Says who it actually reached. A plan with no audience is only ever
             on your own Home tab, and that shouldn't read as "shared". */}
         <p className="text-sm leading-relaxed mb-8" style={{ color: MID }}>
           {audienceUids.length === 0 ? (
             <>
               Your <strong>{planTitle}</strong> is on your Home tab. Add friends
-              to <strong>{group}</strong> and your next plan reaches them too.
+              to <strong>{group}</strong> and your next sidequest reaches them too.
             </>
           ) : (
             <>
@@ -241,7 +241,7 @@ export function CreateTab({ onCreated }: { onCreated: () => void }) {
       )}
 
       <div className="px-5 pt-5 pb-4 flex-shrink-0">
-        <h1 className="text-2xl font-extrabold" style={{ color: DARK }}>Create a Plan</h1>
+        <h1 className="text-2xl font-extrabold" style={{ color: DARK }}>Create a Sidequest</h1>
         <p className="text-xs mt-0.5 font-bold" style={{ color: MID }}>Ready in under 10 seconds ⚡</p>
         <div className="flex items-center gap-2 mt-4">
           {stepLabels.map((s, i) => (
@@ -256,7 +256,7 @@ export function CreateTab({ onCreated }: { onCreated: () => void }) {
 
       <div className="flex-1 overflow-y-auto px-5" style={{ scrollbarWidth: "none" }}>
         <div className="mb-6">
-          <p className="text-sm font-extrabold mb-3" style={{ color: DARK }}>Name your plan</p>
+          <p className="text-sm font-extrabold mb-3" style={{ color: DARK }}>Name your sidequest</p>
 
           {/* The chosen emoji sits beside the field, so the badge the plan will
               actually carry is visible while you're naming it. The chevron is
@@ -264,7 +264,7 @@ export function CreateTab({ onCreated }: { onCreated: () => void }) {
           <div className="flex items-center gap-3 mb-3">
             <button
               onClick={() => setEmojiOpen((o) => !o)}
-              aria-label="Change plan emoji"
+              aria-label="Change sidequest emoji"
               className="relative rounded-2xl flex items-center justify-center text-3xl flex-shrink-0 transition-all"
               style={{
                 width: 56, height: 56,
@@ -509,7 +509,7 @@ export function CreateTab({ onCreated }: { onCreated: () => void }) {
                   style={{ background: badge.color + "22" }}>{badge.emoji}</div>
                 <div className="min-w-0">
                   <p className="font-extrabold text-sm truncate" style={{ color: DARK }}>
-                    {planTitle || "Untitled plan"}
+                    {planTitle || "Untitled sidequest"}
                   </p>
                   <p className="text-xs" style={{ color: MID }}>
                     {timeLabel} · {locationLabel} · {group}
@@ -529,7 +529,7 @@ export function CreateTab({ onCreated }: { onCreated: () => void }) {
             onClick={() => setStep((p) => Math.min(p + 1, 3))}
             className="w-full py-3.5 rounded-2xl font-extrabold text-white"
             style={{ background: named ? SKY : LIGHT }}>
-            {named ? "Continue →" : "Name your plan to continue"}
+            {named ? "Continue →" : "Name your sidequest to continue"}
           </button>
         )}
         {step >= 3 && (
@@ -544,7 +544,7 @@ export function CreateTab({ onCreated }: { onCreated: () => void }) {
               style={{
                 background: named && !sharing ? `linear-gradient(135deg, ${MINT}, ${SKY})` : LIGHT,
               }}>
-              {sharing ? "Sharing…" : "🚀 Share Plan!"}
+              {sharing ? "Sharing…" : "🚀 Share Sidequest!"}
             </button>
           </>
         )}

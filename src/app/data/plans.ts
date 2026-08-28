@@ -394,11 +394,19 @@ function toSuggestions(data: Record<string, unknown>): Suggestion[] {
 }
 
 /**
- * How long a plan stays in a friend's Explore feed after its start time. Long
- * enough that "Coffee at 3" is still joinable at 3:20, short enough that
- * yesterday's plans don't pile up in a feed nobody can act on.
+ * How long a plan stays in a feed after its start time. Long enough that
+ * "Coffee at 3" is still joinable at 3:20, short enough that yesterday's plans
+ * don't pile up in a feed nobody can act on.
+ *
+ * Applied to Home and Explore alike: a plan you hosted last week is as spent as
+ * one a friend hosted last week, and without this Home files it under "Later" —
+ * which is true, and useless — for as long as the account exists.
  */
 const FEED_GRACE_MS = 3 * 60 * 60 * 1000;
+
+/** Whether a plan is still worth listing, by the window above. */
+const stillLive = (plan: Plan) =>
+  (plan.startsAt?.getTime() ?? 0) > Date.now() - FEED_GRACE_MS;
 
 const bySoonest = (a: Plan, b: Plan) =>
   (a.startsAt?.getTime() ?? 0) - (b.startsAt?.getTime() ?? 0);
@@ -445,7 +453,10 @@ export function watchMyPlans(
 
   const fill = (map: Map<string, Plan>, snap: PlanSnapshot) => {
     map.clear();
-    for (const d of snap.docs) map.set(d.id, toPlan(d.id, d.data(), uid));
+    for (const d of snap.docs) {
+      const plan = toPlan(d.id, d.data(), uid);
+      if (stillLive(plan)) map.set(d.id, plan);
+    }
   };
 
   const unsubHosted = onSnapshot(
@@ -487,7 +498,7 @@ export function watchFriendPlans(
       const plans = snap.docs
         .map((d) => toPlan(d.id, d.data(), uid))
         .filter((p) => p.hostUid !== uid)
-        .filter((p) => (p.startsAt?.getTime() ?? 0) > Date.now() - FEED_GRACE_MS);
+        .filter(stillLive);
       plans.sort(bySoonest);
       onPlans(plans);
     },
@@ -538,7 +549,7 @@ function toPlan(id: string, data: Record<string, unknown>, myUid: string): Plan 
   return {
     id,
     emoji:       String(data.emoji ?? "👥"),
-    activity:    String(data.title ?? "Untitled plan"),
+    activity:    String(data.title ?? "Untitled sidequest"),
     host:        mine ? "You" : hostName || "Someone",
     // `ME` is swapped for your own initials at render time, which lets a seeded
     // plan and a real one share one avatar component.
@@ -582,13 +593,13 @@ export function planErrorMessage(err: unknown): string {
 
   switch (code) {
     case "permission-denied":
-      return "Couldn't save the plan. Check your Firestore rules.";
+      return "Couldn't save the sidequest. Check your Firestore rules.";
     case "unavailable":
       return "Can't reach the server. Check your connection and try again.";
     case "not-signed-in":
-      return "You're signed out. Log back in to share a plan.";
+      return "You're signed out. Log back in to share a sidequest.";
     default:
-      return "Couldn't share the plan. Please try again.";
+      return "Couldn't share the sidequest. Please try again.";
   }
 }
 

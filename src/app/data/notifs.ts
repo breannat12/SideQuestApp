@@ -180,7 +180,7 @@ export function buildNotifs(
     out.push({
       id:     `plan:${plan.id}`,
       type:   "plan",
-      title:  `New plan from ${firstNameOf(plan.host)}`,
+      title:  `New sidequest from ${firstNameOf(plan.host)}`,
       body:   planLine(plan),
       // A plan still settling has no server timestamp yet; its start time keeps
       // it in roughly the right place until the write comes back.
@@ -199,7 +199,7 @@ export function buildNotifs(
     out.push({
       id:     `edit:${plan.id}:${plan.updatedAt.getTime()}`,
       type:   "update",
-      title:  `${EDIT_HEADLINE[plan.lastEdit]} for ${possessive(firstNameOf(plan.host))} ${plan.activity} plan`,
+      title:  `${EDIT_HEADLINE[plan.lastEdit]} for ${possessive(firstNameOf(plan.host))} ${plan.activity} sidequest`,
       // The new value is read off the plan rather than stored with the edit, so
       // it's always the same string the card is showing.
       body:   plan.lastEdit === "location" ? `Now meets at ${locationLabel(plan)}`
@@ -221,7 +221,7 @@ export function buildNotifs(
         id:     `suggest:${plan.id}:${s.uid}:${s.at?.getTime() ?? 0}`,
         type:   "suggest",
         title:  `${firstNameOf(s.name)} suggested a ${s.kind === "time" ? "time" : "place"} change to ${plan.activity}`,
-        body:   `Suggestion: ${s.value} — your plan says ${s.kind === "time" ? plan.time : locationLabel(plan)}`,
+        body:   `Suggestion: ${s.value} — your sidequest says ${s.kind === "time" ? plan.time : locationLabel(plan)}`,
         at:     s.at ?? plan.updatedAt ?? new Date(),
         planId: plan.id,
         suggestion: { planId: plan.id, entry: s },
@@ -237,7 +237,7 @@ export function buildNotifs(
       out.push({
         id:     `join:${plan.id}:${guest.uid}`,
         type:   "join",
-        title:  `${firstNameOf(guest.name)} joined your plan`,
+        title:  `${firstNameOf(guest.name)} joined your sidequest`,
         body:   `${guest.name || "Someone"} is in for ${plan.activity} · ${plan.time}`,
         at:     guest.joinedAt ?? plan.createdAt ?? new Date(),
         planId: plan.id,

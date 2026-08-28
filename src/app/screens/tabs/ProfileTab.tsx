@@ -1,16 +1,21 @@
-import { Check, Clock, EyeOff, Settings } from "lucide-react";
+import { Check, Clock, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { Toggle } from "../../components/common/Toggle";
 import { BG, CARD, CORAL, DARK, LAVENDER, MID, MINT, SKY, WHITE } from "../../constants/colors";
 import { useCurrentUser } from "../../data/currentUser";
+import { useMyFriends } from "../../data/friends";
+import { usePlanFeed } from "../../data/planFeed";
 import { signOutUser } from "../../data/users";
 
 export function ProfileTab({ onSignedOut }: { onSignedOut: () => void }) {
   // Availability comes from the user context, not local state: it's persisted
   // on the profile row, so holding a copy here would reset it on every visit.
   const { name, handle, initials, availability: status, setAvailability: setStatus } = useCurrentUser();
+  // The counts above are the same live lists Friends and Home already read, so
+  // they move with the app rather than needing a query of their own.
+  const { friends } = useMyFriends();
+  const { myPlans } = usePlanFeed();
   const [notifs, setNotifs]         = useState(true);
-  const [ghost, setGhost]           = useState(false);
   const [planNotifs, setPlanNotifs] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
 
@@ -33,11 +38,8 @@ export function ProfileTab({ onSignedOut }: { onSignedOut: () => void }) {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto" style={{ scrollbarWidth: "none", background: BG }}>
-      <div className="px-5 pt-5 pb-4 flex items-center justify-between flex-shrink-0">
+      <div className="px-5 pt-5 pb-4 flex-shrink-0">
         <h1 className="text-2xl font-extrabold" style={{ color: DARK }}>Profile</h1>
-        <button className="p-2 rounded-xl" style={{ background: CARD }}>
-          <Settings size={18} style={{ color: MID }} />
-        </button>
       </div>
 
       <div className="mx-5 rounded-3xl p-5 mb-4 flex items-center gap-4"
@@ -52,11 +54,12 @@ export function ProfileTab({ onSignedOut }: { onSignedOut: () => void }) {
         </div>
         <div>
           <h2 className="text-lg font-extrabold" style={{ color: DARK }}>{name || "Your name"}</h2>
-          <p className="text-xs mb-2" style={{ color: MID }}>
-            {handle ? `@${handle} · ` : ""}San Francisco 📍
-          </p>
+          {handle && <p className="text-xs mb-2" style={{ color: MID }}>@{handle}</p>}
+          {/* Friends you've added, and plans you're on — hosted or joined.
+              Both read off the feeds the rest of the app is already showing,
+              so a number here can't disagree with the list behind it. */}
           <div className="flex gap-4">
-            {[["12", "Friends"], ["28", "Plans"], ["94%", "Join Rate"]].map(([val, label]) => (
+            {([[friends.length, "Friends"], [myPlans.length, "Sidequests"]] as const).map(([val, label]) => (
               <div key={label}>
                 <p className="text-base font-extrabold" style={{ color: DARK }}>{val}</p>
                 <p className="text-xs" style={{ color: MID }}>{label}</p>
@@ -96,8 +99,7 @@ export function ProfileTab({ onSignedOut }: { onSignedOut: () => void }) {
           {[
             // COINCIDENCE FEATURE -- sub was "Coincidences & friend activity".
             { label: "Push Notifications", sub: "Friend activity & pings",        val: notifs, set: setNotifs, color: CORAL },
-            { label: "Plan Alerts",         sub: "When friends create nearby plans",val: planNotifs, set: setPlanNotifs, color: SKY },
-            { label: "Ghost Mode",          sub: "Hide your location from friends", val: ghost, set: setGhost, color: MID },
+            { label: "Sidequest Alerts",    sub: "When friends create nearby sidequests", val: planNotifs, set: setPlanNotifs, color: SKY },
           ].map(({ label, sub, val, set, color }) => (
             <div key={label} className="flex items-center gap-3">
               <div className="flex-1">

@@ -70,12 +70,12 @@ export function CancelPlanDialog({ plan, onClose }: { plan: Plan; onClose: () =>
           <button onClick={onClose} disabled={busy}
             className="w-full py-3 rounded-2xl text-sm font-extrabold"
             style={{ background: CARD, color: DARK, opacity: busy ? 0.6 : 1 }}>
-            Nvm, plan is still on!
+            Nvm, sidequest is still on!
           </button>
           <button onClick={() => void confirm()} disabled={busy}
             className="w-full py-3 rounded-2xl text-sm font-extrabold"
             style={{ background: DANGER, color: WHITE, opacity: busy ? 0.6 : 1 }}>
-            {busy ? "Cancelling…" : "Yes, cancel plan"}
+            {busy ? "Cancelling…" : "Yes, cancel sidequest"}
           </button>
         </div>
       </div>

@@ -173,7 +173,7 @@ export function NotifDrawer({
               <p className="text-sm font-extrabold" style={{ color: DARK }}>Nothing yet</p>
               <p className="text-xs leading-relaxed" style={{ color: MID }}>
                 You'll hear when someone asks to be friends, when a friend shares or
-                moves a plan, or when someone joins one of yours.
+                moves a sidequest, or when someone joins one of yours.
               </p>
             </div>
           ) : notifs.map((n) => {

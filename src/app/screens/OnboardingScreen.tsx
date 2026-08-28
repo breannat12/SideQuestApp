@@ -36,7 +36,7 @@ const ONBOARDING_STEPS_NEW: OnboardingStep[] = [
   {
     emoji: "📍", title: "Share your location", color: MINT,
     subtitle: "Only shared with friends you choose.",
-    description: "Hango uses your location to find nearby friends and plans. We never store or sell your location data.",
+    description: "Hango uses your location to find nearby friends and sidequests. We never store or sell your location data.",
     cta: "Allow Location",
     type: "permission",
   },

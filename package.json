@@ -6,7 +6,8 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "deploy": "vite build && firebase deploy --only hosting"
+    "deploy": "vite build && firebase deploy --only hosting,firestore:rules",
+    "deploy:rules": "firebase deploy --only firestore:rules"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

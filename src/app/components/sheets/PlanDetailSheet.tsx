@@ -1,4 +1,4 @@
-import { Clock, MapPin, MessageCircle, Pencil, Share2, Users, X } from "lucide-react";
+import { Clock, MapPin, MessageCircle, Pencil, Users, X } from "lucide-react";
 import { CARD, CORAL, DANGER, DARK, LAVENDER, MID, MINT, SKY, WHITE } from "../../constants/colors";
 import { locationLabel } from "../../data/plans";
 import { usePlanFeed } from "../../data/planFeed";
@@ -113,7 +113,7 @@ export function PlanDetailSheet({ plan: opened, onClose, onEdit, onSuggest }: {
             {plan.cancelled && (
               <p className="text-sm font-extrabold text-center mb-3 py-2.5 rounded-2xl"
                 style={{ background: DANGER + "18", color: DANGER }}>
-                🚫 {plan.host} cancelled this plan
+                🚫 {plan.host} cancelled this sidequest
               </p>
             )}
             {joinError && (
@@ -126,7 +126,7 @@ export function PlanDetailSheet({ plan: opened, onClose, onEdit, onSuggest }: {
                   background: joined ? MINT : `linear-gradient(135deg, ${MINT}, ${SKY})`,
                   opacity: canJoin && !pending ? 1 : 0.6,
                 }}>
-                {pending ? "…" : joined ? (canJoin ? "✓ You're In! · Tap to leave" : "✓ You're hosting") : "Join Plan"}
+                {pending ? "…" : joined ? (canJoin ? "✓ You're In! · Tap to leave" : "✓ You're hosting") : "Join Sidequest"}
               </button>
               {/* Edit is the host's. Everyone else gets the Suggest button in
                   the flexible panel above, when the host left one open. */}
@@ -137,10 +137,6 @@ export function PlanDetailSheet({ plan: opened, onClose, onEdit, onSuggest }: {
                   <Pencil size={14} /> Edit
                 </button>
               )}
-              <button className="w-12 h-12 rounded-2xl flex items-center justify-center self-center"
-                style={{ background: CARD }}>
-                <Share2 size={17} style={{ color: MID }} />
-              </button>
             </div>
           </div>
         </div>

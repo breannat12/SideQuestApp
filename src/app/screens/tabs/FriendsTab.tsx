@@ -1,4 +1,4 @@
-import { ChevronDown, Pencil, Plus, UserPlus, Users } from "lucide-react";
+import { Pencil, Plus, UserPlus, Users } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { AvatarBubble } from "../../components/common/AvatarBubble";
 import { Divider } from "../../components/common/Divider";
@@ -20,8 +20,6 @@ export function FriendsTab() {
   const [inviteOpen, setInviteOpen] = useState(false);
   /** A Group edits it, "new" creates one, null means neither is open. */
   const [editing, setEditing]     = useState<Group | "new" | null>(null);
-  /** All Friends starts collapsed to a stack of faces; this opens it. */
-  const [allOpen, setAllOpen]     = useState(false);
 
   // A group deleted on another device shouldn't leave the list filtered by it.
   const activeGroup = groups.find((g) => g.id === activeId) ?? null;
@@ -34,10 +32,6 @@ export function FriendsTab() {
   // narrowed things to — filtering by a group and then seeing someone outside
   // it up top would read as a bug.
   const freeNow = visible.filter((f) => statusOf(statuses, f.uid) === "available");
-
-  // Filtering to a group is a request to see who's in it, so the list opens
-  // itself and the collapsed control steps out of the way.
-  const showAll = allOpen || Boolean(activeGroup);
 
   // Full-panel replacements, same as Invite
   if (inviteOpen) return <InvitePage onBack={() => setInviteOpen(false)} />;
@@ -202,56 +196,10 @@ export function FriendsTab() {
           </div>
         )}
 
-        {/* Collapsed by default: the whole roster as a stack of faces. Free
-            now is the part worth acting on, and a second full list under it
-            pushed everything off the screen. */}
-        {!activeGroup && friends.length > 0 && (
-          <button onClick={() => setAllOpen((open) => !open)}
-            className="w-full flex items-center gap-3 p-3 rounded-2xl mb-2"
-            style={{ background: WHITE, border: "1px solid rgba(0,0,0,0.06)" }}>
-            <AvatarStack friends={visible} />
-            {/* No count here — the divider directly above already carries it. */}
-            <p className="flex-1 text-left text-sm font-extrabold" style={{ color: DARK }}>
-              {showAll ? "Show less" : "Show all"}
-            </p>
-            <ChevronDown size={16} strokeWidth={3} className="flex-shrink-0"
-              style={{ color: MID, transform: showAll ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
-          </button>
-        )}
-
-        {showAll && visible.map((f) => (
+        {visible.map((f) => (
           <FriendRow key={f.uid} friend={f} groups={groups} />
         ))}
       </div>
-    </div>
-  );
-}
-
-/**
- * The overlapping faces on the collapsed row, in the same style as the social
- * proof on the welcome screen. Hand-rolled rather than `AvatarBubble` because
- * these need a ring in the card colour to read as separate at this overlap.
- */
-const STACK_FACES = 5;
-
-function AvatarStack({ friends }: { friends: Friend[] }) {
-  const shown = friends.slice(0, STACK_FACES);
-  const extra = friends.length - shown.length;
-  return (
-    <div className="flex -space-x-2 flex-shrink-0">
-      {shown.map((f) => (
-        <div key={f.uid}
-          className="w-9 h-9 rounded-full border-2 flex items-center justify-center text-xs font-extrabold text-white select-none"
-          style={{ background: f.color, borderColor: WHITE }}>
-          {f.avatar}
-        </div>
-      ))}
-      {extra > 0 && (
-        <div className="w-9 h-9 rounded-full border-2 flex items-center justify-center text-xs font-extrabold select-none"
-          style={{ background: BG, borderColor: WHITE, color: MID }}>
-          +{extra}
-        </div>
-      )}
     </div>
   );
 }

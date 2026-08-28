@@ -63,7 +63,7 @@ export function MyPlanCard({ plan, onTap, onEdit, onCancel, onSuggest }: {
                   color: WHITE,
                   boxShadow: `0 2px 6px ${SKY}55`,
                 }}>
-                Your Plan!
+                Your Sidequest!
               </span>
             )}
           </div>
@@ -112,10 +112,14 @@ export function MyPlanCard({ plan, onTap, onEdit, onCancel, onSuggest }: {
         <div className="flex gap-2 mt-3">
           {isHost ? (
             <>
+              {/* Same shape as Suggest below — a drawn pencil rather than the
+                  emoji, which rendered at the platform's own size and colour
+                  and so refused to match anything around it. The icon takes
+                  `currentColor`, so it picks up the blue from `color`. */}
               <button onClick={(e) => { e.stopPropagation(); onEdit(); }}
-                className="flex-1 py-2.5 rounded-2xl text-xs font-extrabold"
+                className="flex-1 py-2.5 rounded-2xl text-xs font-extrabold flex items-center justify-center gap-1"
                 style={{ background: SKY + "18", color: SKY }}>
-                ✏️ Edit Plan
+                <Pencil size={11} /> Edit
               </button>
               <button onClick={(e) => { e.stopPropagation(); onCancel(); }}
                 className="px-4 py-2.5 rounded-2xl text-xs font-extrabold"
@@ -134,8 +138,11 @@ export function MyPlanCard({ plan, onTap, onEdit, onCancel, onSuggest }: {
                   <Pencil size={11} /> Suggest
                 </button>
               )}
+              {/* Sized like Cancel rather than stretched: both are the same
+                  kind of action, and `ml-auto` keeps this one on the right edge
+                  even when there's no Suggest beside it to push it there. */}
               <button onClick={(e) => { e.stopPropagation(); void toggleJoin(plan); }} disabled={leaving}
-                className="flex-1 py-2.5 rounded-2xl text-xs font-extrabold"
+                className="px-4 py-2.5 rounded-2xl text-xs font-extrabold ml-auto"
                 style={{ background: DANGER, color: WHITE, opacity: leaving ? 0.6 : 1 }}>
                 {leaving ? "Leaving…" : "Leave"}
               </button>

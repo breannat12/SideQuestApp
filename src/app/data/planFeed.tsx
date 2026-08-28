@@ -110,7 +110,7 @@ export function PlanFeedProvider({ children }: { children: ReactNode }) {
 
     const unsubMine = watchMyPlans(
       (found) => { setMyPlans(found); setError(""); mineReady = true; settle(); },
-      ()      => { setError("Couldn't load your plans."); mineReady = true; settle(); },
+      ()      => { setError("Couldn't load your sidequests."); mineReady = true; settle(); },
     );
     // A failure here is quieter than one on Home: an empty friends' feed reads
     // as "nothing on" rather than as something broken, and the error banner

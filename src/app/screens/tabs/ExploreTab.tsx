@@ -1,8 +1,7 @@
-import { Clock, MapPin, Search } from "lucide-react";
+import { Clock, MapPin, Search, X } from "lucide-react";
 import { useState } from "react";
 import { PlanCard } from "../../components/plans/PlanCard";
 import { BG, CARD, CORAL, DARK, LIGHT, MID, SKY, WHITE } from "../../constants/colors";
-import { ACTIVITIES } from "../../data/activities";
 import { useMyFriends } from "../../data/friends";
 import { useMyGroups } from "../../data/groups";
 import { usePlanFeed } from "../../data/planFeed";
@@ -18,9 +17,9 @@ export function ExploreTab({ onPlanTap, onSuggest }: {
   const { friendPlans, loading, isJoined, pendingId, toggleJoin, joinError,
           myCoords, locating } = usePlanFeed();
 
-  const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
-  const [selectedGroup, setSelectedGroup]       = useState<string | null>(null);
-  const [sortBy, setSortBy]                     = useState<"distance" | "time">("time");
+  const [search, setSearch]               = useState("");
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  const [sortBy, setSortBy]               = useState<"distance" | "time">("time");
 
   // A group deleted while its chip was active would otherwise keep filtering
   // the list from behind a row that's no longer on screen.
@@ -32,11 +31,16 @@ export function ExploreTab({ onPlanTap, onSuggest }: {
   const canSortByDistance = Boolean(myCoords);
   const sorting = canSortByDistance ? sortBy : "time";
 
+  // Titles only, and matched anywhere in one rather than just at the start:
+  // people search for the word they remember ("coffee"), not for how the plan
+  // happened to be named ("Morning coffee run").
+  const term = search.trim().toLowerCase();
+
   const filtered = friendPlans
     .filter((p) => {
-      const actMatch = !selectedActivity || p.emoji === ACTIVITIES.find((a) => a.label === selectedActivity)?.emoji;
-      const grpMatch = !groupFilter || p.group === groupFilter;
-      return actMatch && grpMatch;
+      const nameMatch = !term || p.activity.toLowerCase().includes(term);
+      const grpMatch  = !groupFilter || p.group === groupFilter;
+      return nameMatch && grpMatch;
     })
     .slice()
     .sort((a, b) =>
@@ -45,29 +49,34 @@ export function ExploreTab({ onPlanTap, onSuggest }: {
         : (a.startsAt?.getTime() ?? 0) - (b.startsAt?.getTime() ?? 0)
     );
 
-  const filtering = Boolean(selectedActivity || groupFilter);
+  const filtering = Boolean(term || groupFilter);
 
   return (
     <div className="flex flex-col h-full" style={{ background: BG }}>
       <div className="px-5 pt-5 pb-0 flex-shrink-0">
         <h1 className="text-2xl font-extrabold mb-3" style={{ color: DARK }}>Explore</h1>
-        <div className="flex items-center gap-2 px-4 py-3 rounded-2xl mb-3"
+        {/* Titles only — there's nothing else here worth searching, and a box
+            that promises people and places would be promising two things the
+            feed can't answer. */}
+        <label className="flex items-center gap-2 px-4 py-3 rounded-2xl mb-3"
           style={{ background: CARD, border: "1.5px solid rgba(0,0,0,0.06)" }}>
-          <Search size={16} style={{ color: MID }} />
-          <span className="text-sm" style={{ color: LIGHT }}>Search plans, people, places…</span>
-        </div>
-        <div className="flex gap-2 overflow-x-auto pb-0.5 mb-2.5" style={{ scrollbarWidth: "none" }}>
-          {ACTIVITIES.map((a) => {
-            const active = selectedActivity === a.label;
-            return (
-              <button key={a.label} onClick={() => setSelectedActivity(active ? null : a.label)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-extrabold flex-shrink-0 transition-all"
-                style={{ background: active ? a.color : a.color + "20", color: active ? WHITE : DARK }}>
-                {a.emoji} {a.label}
-              </button>
-            );
-          })}
-        </div>
+          <Search size={16} style={{ color: MID }} className="flex-shrink-0" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search sidequests…"
+            aria-label="Search sidequests by name"
+            className="flex-1 min-w-0 bg-transparent text-sm outline-none"
+            style={{ color: DARK }}
+          />
+          {search && (
+            <button type="button" onClick={() => setSearch("")} aria-label="Clear search"
+              className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center"
+              style={{ background: LIGHT + "30" }}>
+              <X size={12} style={{ color: MID }} />
+            </button>
+          )}
+        </label>
         {/* Nothing but "All" until you've made a group, so the row hides itself. */}
         <div className="flex gap-2 overflow-x-auto pb-3" style={{ scrollbarWidth: "none",
           display: groups.length ? undefined : "none" }}>
@@ -87,7 +96,7 @@ export function ExploreTab({ onPlanTap, onSuggest }: {
       {/* Count + sort */}
       <div className="px-5 flex items-center justify-between mb-3 flex-shrink-0">
         <span className="text-xs font-bold" style={{ color: MID }}>
-          {loading ? "Loading…" : `${filtered.length} ${filtered.length === 1 ? "plan" : "plans"}`}
+          {loading ? "Loading…" : `${filtered.length} ${filtered.length === 1 ? "sidequest" : "sidequests"}`}
         </span>
         {/* "Nearest" needs your position, so it stays disabled until we have
             one rather than silently sorting by nothing. */}
@@ -122,7 +131,7 @@ export function ExploreTab({ onPlanTap, onSuggest }: {
         )}
 
         {loading ? (
-          <p className="text-sm font-bold text-center py-12" style={{ color: LIGHT }}>Loading plans…</p>
+          <p className="text-sm font-bold text-center py-12" style={{ color: LIGHT }}>Loading sidequests…</p>
         ) : filtered.length > 0 ? (
           filtered.map((p) => (
             <PlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} compact
@@ -132,11 +141,17 @@ export function ExploreTab({ onPlanTap, onSuggest }: {
               onSuggest={p.flexTime || p.flexLoc ? () => onSuggest(p) : undefined} />
           ))
         ) : filtering ? (
-          <div className="flex flex-col items-center py-10 gap-3">
+          <div className="flex flex-col items-center py-10 gap-3 px-5 text-center">
             <span className="text-4xl">🔍</span>
-            <p className="text-sm font-bold" style={{ color: MID }}>No plans match these filters</p>
-            <button onClick={() => { setSelectedActivity(null); setSelectedGroup(null); }}
-              className="text-xs font-extrabold" style={{ color: SKY }}>Clear filters</button>
+            {/* Naming the term is what tells someone the search ran at all —
+                "no matches" alone reads the same as an empty feed. */}
+            <p className="text-sm font-bold" style={{ color: MID }}>
+              {term ? `No sidequests called "${search.trim()}"` : "No sidequests match these filters"}
+            </p>
+            <button onClick={() => { setSearch(""); setSelectedGroup(null); }}
+              className="text-xs font-extrabold" style={{ color: SKY }}>
+              {term && !groupFilter ? "Clear search" : "Clear filters"}
+            </button>
           </div>
         ) : friends.length === 0 ? (
           /* Nothing here is a friends problem, not a plans problem — say so,
@@ -145,7 +160,7 @@ export function ExploreTab({ onPlanTap, onSuggest }: {
             <span className="text-5xl">👋</span>
             <p className="text-base font-extrabold" style={{ color: DARK }}>No friends yet</p>
             <p className="text-sm" style={{ color: MID }}>
-              Add friends from the Friends tab. Their plans turn up here once they share one.
+              Add friends from the Friends tab. Their sidequests turn up here once they share one.
             </p>
           </div>
         ) : (
@@ -153,7 +168,7 @@ export function ExploreTab({ onPlanTap, onSuggest }: {
             <span className="text-5xl">🌱</span>
             <p className="text-base font-extrabold" style={{ color: DARK }}>Nothing on right now</p>
             <p className="text-sm" style={{ color: MID }}>
-              When a friend shares a plan with you, it lands here. Tap + to start one yourself.
+              When a friend shares a sidequest with you, it lands here. Tap + to start one yourself.
             </p>
           </div>
         )}

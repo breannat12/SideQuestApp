@@ -13,6 +13,15 @@ const greeting = () => {
   return "Good evening";
 };
 
+/**
+ * "Wednesday, August 27, 2026". No locale is passed, so this reads in whatever
+ * the browser is set to rather than forcing US order on everyone.
+ */
+const today = () =>
+  new Date().toLocaleDateString(undefined, {
+    weekday: "long", month: "long", day: "numeric", year: "numeric",
+  });
+
 export function HomeTab({ onPlanTap, onEdit, onCancel, onSuggest, onBell, unread }: {
   onPlanTap: (p: Plan) => void;
   /** Your own plans only — the app shell guards it too. */
@@ -37,6 +46,11 @@ export function HomeTab({ onPlanTap, onEdit, onCancel, onSuggest, onBell, unread
         <div>
           <p className="text-xs font-bold" style={{ color: MID }}>{greeting()} 👋</p>
           <h1 className="text-2xl font-extrabold leading-tight" style={{ color: DARK }}>Hey, {firstName}!</h1>
+          {/* Only once there's a list to date. With none, the empty state below
+              is already showing today's date, and twice would be once too many. */}
+          {plans.length > 0 && (
+            <p className="text-xs font-bold mt-1" style={{ color: SKY }}>{today()}</p>
+          )}
         </div>
         {/* Avatar circle with overlapping bell */}
         <button onClick={onBell} className="relative flex-shrink-0">
@@ -71,7 +85,7 @@ export function HomeTab({ onPlanTap, onEdit, onCancel, onSuggest, onBell, unread
         )}
 
         {!error && loading && (
-          <p className="text-sm font-bold text-center py-12" style={{ color: LIGHT }}>Loading your plans…</p>
+          <p className="text-sm font-bold text-center py-12" style={{ color: LIGHT }}>Loading your sidequests…</p>
         )}
 
         {!error && !loading && (
@@ -82,7 +96,9 @@ export function HomeTab({ onPlanTap, onEdit, onCancel, onSuggest, onBell, unread
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-base font-extrabold" style={{ color: DARK }}>Today's Sidequests</h2>
                   <span className="text-xs font-bold px-2 py-0.5 rounded-full"
-                    style={{ background: SKY + "20", color: SKY }}>{todayPlans.length} plans</span>
+                    style={{ background: SKY + "20", color: SKY }}>
+                    {todayPlans.length} {todayPlans.length === 1 ? "sidequest" : "sidequests"}
+                  </span>
                 </div>
                 {todayPlans.map((p) => (
                   <MyPlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onEdit={() => onEdit(p)} onCancel={() => onCancel(p)}
@@ -103,7 +119,9 @@ export function HomeTab({ onPlanTap, onEdit, onCancel, onSuggest, onBell, unread
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-base font-extrabold" style={{ color: DARK }}>Later</h2>
                   <span className="text-xs font-bold px-2 py-0.5 rounded-full"
-                    style={{ background: LAVENDER + "20", color: LAVENDER }}>{laterPlans.length} plans</span>
+                    style={{ background: LAVENDER + "20", color: LAVENDER }}>
+                    {laterPlans.length} {laterPlans.length === 1 ? "sidequest" : "sidequests"}
+                  </span>
                 </div>
                 {laterPlans.map((p) => (
                   <MyPlanCard key={p.id} plan={p} onTap={() => onPlanTap(p)} onEdit={() => onEdit(p)} onCancel={() => onCancel(p)}
@@ -114,11 +132,13 @@ export function HomeTab({ onPlanTap, onEdit, onCancel, onSuggest, onBell, unread
               </>
             )}
 
-            {/* Empty nudge */}
+            {/* Empty nudge. `min-h-full` claims the whole scroll area — with
+                nothing else on the tab there's nothing to scroll — so the block
+                can centre itself in it rather than sitting under the greeting. */}
             {plans.length === 0 && (
-              <div className="flex flex-col items-center py-12 gap-3 text-center">
-                <span className="text-5xl">📅</span>
-                <p className="text-base font-extrabold" style={{ color: DARK }}>No plans yet</p>
+              <div className="flex flex-col items-center justify-center min-h-full gap-3 text-center">
+                <p className="text-2xl font-extrabold" style={{ color: SKY }}>{today()}</p>
+                <p className="text-base font-extrabold mt-3" style={{ color: DARK }}>No sidequests yet</p>
                 <p className="text-sm" style={{ color: MID }}>Tap + to create one, or join a friend's from Explore.</p>
               </div>
             )}
